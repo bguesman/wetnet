@@ -16,5 +16,5 @@ class Renderer():
         img = np.array(255 * np.repeat(img[:,:,np.newaxis], 3, axis=2),
             dtype=np.uint8)
         resized = cv2.resize(img, dsize=(self.w, self.h),
-            interpolation=cv2.INTER_CUBIC)
+            interpolation=cv2.INTER_LINEAR)
         return resized

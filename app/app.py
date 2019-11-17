@@ -26,7 +26,7 @@ class TexRenderer():
 		self.h = h
 
 		# Simulation object.
-		self.sim = Smoke(30, 20)
+		self.sim = Smoke(40, 40)
 
 		# Renderer for the sim.
 		self.renderer = Renderer(self.w, self.h)
@@ -102,7 +102,7 @@ class TexRenderer():
 
 
 def main():
-	tex_renderer = TexRenderer(1024, 512)
+	tex_renderer = TexRenderer(600, 600)
 	tex_renderer.run()
 
 main()
