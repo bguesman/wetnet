@@ -5,19 +5,25 @@ class Smoke():
 
     def __init__(self, w, h, dt=1):
         # Grid width and height. Pad with dummy cells for boundary conditions.
-        self.w = w
-        self.h = h
+        self.w = w+2
+        self.h = h+2
+
         # Density grid. Stored in column-major order.
         # 1st dimension = x coordinate, second dimension = y coordinate.
-        # self.d = np.random.rand(self.w, self.h)
         self.d = np.zeros((self.w, self.h))
-        self.d[int(self.w/2)-5:int(self.w/2)+5,int(self.h/2)-5:int(self.h/2)+5] = 3
+
+        # Density sources.
+        self.sources = np.zeros((self.w, self.h))
+        self.sources[20:22,20:22] = 0.3
+
         # Velocity grid. Stored in column-major order.
         self.v = np.zeros((self.w, self.h, 2))
-        # self.v[:,8,0] = 0.001
+
         # Force grid. Stored in column-major order.
         self.F = np.zeros((self.w, self.h, 2))
-        self.F[:,18:22,0] = 0.01
+        self.F[20:22,:,1] = -0.01
+        # self.F[:,:,1] = -0.01
+
         # Time counter.
         self.t = 0
         # Time step.
@@ -27,24 +33,25 @@ class Smoke():
         # Run through all our velocity updates.
         self.v = self.add_force(self.v, self.F)
         self.v = self.impose_boundary(self.v, 2, 'collision')
-        # self.F = np.zeros((self.w, self.h, 2))
 
         self.v = self.advect(self.v, 2, 0.0, 'linear')
         self.v = self.impose_boundary(self.v, 2, 'collision')
 
-        self.v = self.diffuse(self.v, 0.0, 2, 'collision')
-        self.v = self.impose_boundary(self.v, 2, 'collision')
-
+        # self.v = self.diffuse(self.v, 0.0, 2, 'collision')
+        # self.v = self.impose_boundary(self.v, 2, 'collision')
+        #
         self.v = self.project(self.v)
         self.v = self.impose_boundary(self.v, 2, 'collision')
 
         # Run through all our density updates.
+        self.d = self.add_force(self.d, self.sources)
+
         self.d = self.advect(self.d, 1, 0.0, 'linear')
         self.d = self.impose_boundary(self.d, 1, 'same')
 
         # Update timestep.
         self.t += self.dt
-        return np.transpose(self.d)
+        return np.transpose(self.d[1:-1,1:-1])
 
     def add_force(self, data, force):
         # Just take one first order step.
@@ -78,17 +85,18 @@ class Smoke():
         a = self.dt * rate
         v_new = np.zeros(v.shape)
         for i in range(20):
-            v_new[1:-2,1:-2] = (1.0 / (4.0 * a + 1.0)) * \
-                (a*(v_new[2:-1,1:-2] + v_new[0:-3,1:-2]
-                + v_new[1:-2,2:-1] + v_new[1:-2,0:-3]) + v[1:-2,1:-2])
+            v_new[1:-1,1:-1] = (1.0 / (4.0 * a + 1.0)) * \
+                (a*(v_new[2:,1:-1] + v_new[0:-2,1:-1]
+                + v_new[1:-1,2:] + v_new[1:-1,0:-2]) + v[1:-1,1:-1])
             v_new = self.impose_boundary(v_new, dim, boundary_type)
         return v_new
 
+    # TODO: seems to be biased toward positive grid edges in some way?
     def project(self, v):
         div = np.zeros((self.w, self.h))
         p = np.zeros((self.w, self.h))
-        div[1:-2,1:-2] = 0.5 * (v[1:-2,2:-1,1] - v[1:-2,0:-3,1]) \
-            + 0.5 * (v[2:-1,1:-2,0] - v[0:-3,1:-2,0])
+        div[1:-1,1:-1] = 0.5 * (v[1:-1,2:,1] - v[1:-1,0:-2,1] \
+            + v[2:,1:-1,0] - v[0:-2,1:-1,0])
 
         # Above vectorizes this:
         # for x in range(1, self.w-1):
@@ -101,8 +109,8 @@ class Smoke():
 
         # Projection iteration.
         for i in range(20):
-            p[1:-2,1:-2] = 0.25 * (p[1:-2,2:-1] + p[1:-2,0:-3] + p[2:-1,1:-2] \
-                + p[0:-3, 1:-2] - div[1:-2,1:-2])
+            p[1:-1,1:-1] = 0.25 * (p[1:-1,2:] + p[1:-1,0:-2] + p[2:,1:-1] \
+                + p[0:-2, 1:-1] - div[1:-1,1:-1])
 
             # Above vectorizes this:
             # for x in range(1, self.w-1):
@@ -113,8 +121,8 @@ class Smoke():
             p = self.impose_boundary(p, 1, 'same')
 
         # Velocity minus grad of pressure.
-        v[1:-2,1:-2,1] -= 0.5 * (p[1:-2,2:-1] - p[1:-2,0:-3])
-        v[1:-2,1:-2,0] -= 0.5 * (p[2:-1,1:-2] - p[0:-3,1:-2])
+        v[1:-1,1:-1,1] -= 0.5 * (p[1:-1,2:] - p[1:-1,0:-2])
+        v[1:-1,1:-1,0] -= 0.5 * (p[2:,1:-1] - p[0:-2,1:-1])
         # Above vectorizes this:
         # for x in range(1, self.w-1):
             # for y in range(1, self.h-1):
@@ -128,6 +136,7 @@ class Smoke():
         return point[0] >= 0.0 and point[1] >= 0.0 \
             and point[0] <= self.w - 1 and point[1] <= self.h - 1
 
+    # TODO: vectorize.
     def impose_boundary(self, data, dim, type):
         if (type == 'zero'):
             data[:,[0,-1]] = data[[0,-1]] = np.zeros(dim)
@@ -148,21 +157,19 @@ class Smoke():
             # Left and right columns.
             for y in range(self.h):
                 data[0, y] = np.array([0, data[1, y][1]])
-                data[self.w-1, y] = np.array([0, data[self.w-2, y][1]])
+                data[-1, y] = np.array([0, data[-2, y][1]])
             # Top and bottom rows.
             for x in range(self.w):
                 data[x, 0] = np.array([data[x, 1][0], 0])
-                data[x, self.h-1] = np.array([data[x, self.h-2][0], 0])
+                data[x, -1] = np.array([data[x, -2][0], 0])
         if (type == 'collision'):
             assert (dim == 2)
             # Left and right columns.
-            for y in range(self.h):
-                data[0, y] = np.array([-data[1, y][0], data[1, y][1]])
-                data[self.w-1, y] = np.array([-data[self.w-2, y][0],
-                    data[self.w-2, y][1]])
+
+            # for y in range(self.h):
+            data[0,:] = np.stack([-data[1,:,0], data[1,:,1]], axis=-1)
+            data[-1,:] = np.stack([-data[-2,:,0], data[-2,:,1]], axis=-1)
             # Top and bottom rows.
-            for x in range(self.w):
-                data[x, 0] = np.array([data[x, 1][0], -data[x, 1][1]])
-                data[x, self.h-1] = np.array([data[x, self.h-2][0],
-                    -data[x, self.h-2][1]])
+            data[:,0] = np.stack([data[:,1,0], -data[:,1,1]], axis=-1)
+            data[:,-1] = np.stack([data[:,-2,0], -data[:,-2,1]], axis=-1)
         return data
