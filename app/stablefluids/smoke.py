@@ -16,7 +16,9 @@ class Smoke():
 
         # Density sources.
         self.sources = np.zeros((self.w, self.h))
-        self.sources[int(self.w/2)-15:int(self.w/2)+15,int(self.h/2)-15:int(self.h/2)+15] = 0.3 * np.random.rand(30, 30)
+        # self.sources[0:int(self.w),0:int(self.h/2)] = 0.3 * np.random.rand(int(self.w), int(self.h/2))
+        # self.sources[int(self.w/2)-15:int(self.w/2)+15,int(self.h/2)-15:int(self.h/2)+15] = 1 * np.random.rand(30, 30)
+        self.sources[int(self.w/2)-15:int(self.w/2)+15,-30:] = 1 * np.random.rand(30, 30)
 
         # Velocity grid. Stored in column-major order.
         self.v = np.zeros((self.w, self.h, 2))
@@ -26,8 +28,12 @@ class Smoke():
 
         # self.F[int(self.w/2)-15:int(self.w/2)+15,:,1] = 0.1 * (np.random.rand(30, 202) - 1)
         # self.F[int(self.w/2)-15:int(self.w/2)+15,:,0] = 0.1 * (np.random.rand(30, 202) - 0.5)
-        self.F[int(self.w/2)-15:int(self.w/2)+15,int(self.w/2)-15:int(self.w/2)+15,1] = 0.4 * (np.random.rand(30, 30) - 1)
-        self.F[:,:,0] = 0.2 * (np.random.rand(202, 202) - 0.5)
+        # self.F[int(self.w/2)-15:int(self.w/2)+15,int(self.w/2)-15:int(self.w/2)+15,1] = 0.1 * (np.random.rand(30, 30) - 1)
+        # self.F[:,:,0] = 0.2 * (np.random.rand(202, 202) - 0.5)
+        # self.F[int(self.w/2)-15:int(self.w/2)+15,int(self.w/2)-15:int(self.w/2)+15,1] = -0.4
+
+        # self.F[int(self.w/2)-15:int(self.w/2)+15,int(self.h/2)-15:int(self.h/2)+15,1] = -0.4
+        self.F[int(self.w/2)-15:int(self.w/2)+15,-30:,1] = -0.1
 
         # Time counter.
         self.t = 0
@@ -35,18 +41,26 @@ class Smoke():
         self.dt = dt
 
         # Viscosity.
-        self.viscosity = 0.001
+        self.viscosity = 0.1
+
+        # Vorticity confinement weight.
+        self.epsilon = 0.1
 
         # Number of iterations to use when performing diffusion and
         # projection steps.
         self.num_steps = 10
 
     def step(self):
-        self.sources[int(self.w/2)-15:int(self.w/2)+15,int(self.h/2)-15:int(self.h/2)+15] = 0.1 * np.random.rand(30, 30)
+        # HACK: randomize source and force to make it look pretty.
+        # self.sources[int(self.w/2)-15:int(self.w/2)+15,int(self.h/2)-15:int(self.h/2)+15] = 1 * np.random.rand(30, 30)
         # self.F[int(self.w/2)-15:int(self.w/2)+15,:,1] = 0.1 * (np.random.rand(30, 202) - 1)
         # self.F[int(self.w/2)-15:int(self.w/2)+15,:,0] = 1 * (np.random.rand(30, 202) - 0.5)
-        self.F[int(self.w/2)-15:int(self.w/2)+15,int(self.w/2)-15:int(self.w/2)+15,1] = 0.4 * (np.random.rand(30, 30) - 1)
-        self.F[:,:,0] = 0.2 * (np.random.rand(202, 202) - 0.5)
+        # self.F[int(self.w/2)-15:int(self.w/2)+15,int(self.w/2)-15:int(self.w/2)+15,1] = 0.1 * (np.random.rand(30, 30) - 1)
+        # self.F[:,:,0] = 0.2 * (np.random.rand(202, 202) - 0.5)
+
+        # Add vorticity confinement force.
+        # self.F = self.vorticity_confinement(self.F, self.v)
+
         # Run through all our velocity updates.
         # start = datetime.datetime.now()
         self.v = self.add_force(self.v, self.F)
@@ -74,9 +88,12 @@ class Smoke():
 
         # Run through all our density updates.
         self.d = self.add_force(self.d, self.sources)
+        self.sources = np.zeros((self.w, self.h))
 
         self.d = self.advect(self.d, 1, 0.0, 'linear')
-        self.d = self.impose_boundary(self.d, 1, 'same')
+        self.d = self.impose_boundary(self.d, 1, 'zero')
+
+        print(np.average(self.d))
 
         # Update timestep.
         self.t += self.dt
@@ -101,9 +118,6 @@ class Smoke():
             backtraced_locations = np.abs(backtraced_locations)
 
         # Sample the velocity at those points, set it to the new velocity.
-        # interpolated = scipy.interpolate.griddata(grid.reshape(-1,2),
-        #     data.reshape(-1, dim), (backtraced_locations[:,:,0], backtraced_locations[:,:,1]),# backtraced_locations.reshape(-1,2),
-        #     method=interp_method, fill_value=fill)
         backtraced_locations_reshaped = backtraced_locations.reshape(-1,2).transpose()
         if (dim == 2):
             interpolated_x = ndimage.map_coordinates(data[:,:,0],
@@ -135,46 +149,56 @@ class Smoke():
         p = np.zeros((self.w, self.h))
         div[1:-1,1:-1] = 0.5 * (v[1:-1,2:,1] - v[1:-1,0:-2,1] \
             + v[2:,1:-1,0] - v[0:-2,1:-1,0])
-
-        # Above vectorizes this:
-        # for x in range(1, self.w-1):
-        #     for y in range(1, self.h-1):
-        #         # Finite differences approximation of divergence.
-        #         div[x,y] = 0.5 * (v[x+1, y][0] - v[x-1, y][0]
-        #             + v[x, y+1][1]-v[x,y-1][1])
-
         div = self.impose_boundary(div, 1, 'same')
 
         # Projection iteration.
         for i in range(self.num_steps):
             p[1:-1,1:-1] = 0.25 * (p[1:-1,2:] + p[1:-1,0:-2] + p[2:,1:-1] \
                 + p[0:-2, 1:-1] - div[1:-1,1:-1])
-
-            # Above vectorizes this:
-            # for x in range(1, self.w-1):
-            #     for y in range(1, self.h-1):
-            #         p[x,y] = 0.25 * (p[x+1, y] + p[x-1, y]
-            #             + p[x, y+1]+p[x,y-1]-div[x,y])
-
             p = self.impose_boundary(p, 1, 'same')
 
         # Velocity minus grad of pressure.
         v[1:-1,1:-1,1] -= 0.5 * (p[1:-1,2:] - p[1:-1,0:-2])
         v[1:-1,1:-1,0] -= 0.5 * (p[2:,1:-1] - p[0:-2,1:-1])
-        # Above vectorizes this:
-        # for x in range(1, self.w-1):
-            # for y in range(1, self.h-1):
-            #     v[x,y,0] -= 0.5 * (p[x+1, y] - p[x-1, y])
-            #     v[x,y,1] -= 0.5 * (p[x, y+1] - p[x, y-1])
 
         return v
 
+    # def vorticity_confinement(self, F, v):
+    #     # Code snippet:
+    #     # https://softologyblog.wordpress.com/2019/03/13/vorticity-confinement-for-eulerian-fluid-simulations/
+    #
+    #     # Compute curls of each neighboring cell.
+    #     curl_x0 = np.zeros(v.shape[0], v.shape[1])
+    #     curl_x1 = np.zeros(v.shape[0], v.shape[1])
+    #     curl_y0 = np.zeros(v.shape[0], v.shape[1])
+    #     curl_y1 = np.zeros(v.shape[0], v.shape[1])
+    #
+    #     curl_x0[2:-2,2:-2,0] = 0.5*(v[:,3:-1,0] - v[:,1:-3,0] - (v[2:-2,:,1] - v[0:-4,:,1]))
+    #     curl_x1[2:-2,2:-2,0] = 0.5*(v[:,3:-1,0] - v[:,1:-3,0] - (v[4:,:,1] - v[2:-2,:,1]))
+    #     curl_y0[2:-2,2:-2,0] = 0.5*(v[:,2:-2,1] - v[:,0:-4,1] - (v[3:-1,:,0] - v[1:-3,:,0]))
+    #     curl_y1[2:-2,2:-2,0] = 0.5*(v[:,4:,1] - v[:,2:-2,1] - (v[3:-1,:,0] - v[1:-3,:,0]))
+    #
+    #     # Impose boundaries.
+    #     for curl in [curl_x0, curl_x1, curl_y0, curl_y1]:
+    #         impose_boundary(curl[1:-1,1:-1], 1, 'same')
+    #         impose_boundary(curl, 1, 'same')
+    #
+    #     dx = np.abs(curl_y0) - np.abs(curl_y1)
+    #     dy =
+    #
+    #     curl = impose_boundary(curl, 1, 'same')
+    #
+    #     # Cross product of curl(v) with v.
+    #     cross = np.zeros(v.shape[0], v.shape[1])
+    #     cross = impose_boundary(cross, 1, 'same')
 
     def in_bounds(self, point):
         return point[0] >= 0.0 and point[1] >= 0.0 \
             and point[0] <= self.w - 1 and point[1] <= self.h - 1
 
     def impose_boundary(self, data, dim, type):
+        if (type == 'zero'):
+            data[:,[0,-1]] = data[[0,-1]] = np.zeros(dim)
         if (type == 'same'):
             # Left and right columns.
             data[0, :] = data[1, :]
