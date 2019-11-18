@@ -3,7 +3,7 @@ import scipy.interpolate
 
 class Smoke():
 
-    def __init__(self, w, h, dt=1):
+    def __init__(self, w, h, dt=3):
         # Grid width and height. Pad with dummy cells for boundary conditions.
         self.w = w+2
         self.h = h+2
@@ -14,20 +14,22 @@ class Smoke():
 
         # Density sources.
         self.sources = np.zeros((self.w, self.h))
-        self.sources[20:22,20:22] = 0.3
+        self.sources[int(self.w/2)-1:int(self.w/2)+1,int(self.h/2)-1:int(self.h/2)+1] = 0.3
 
         # Velocity grid. Stored in column-major order.
         self.v = np.zeros((self.w, self.h, 2))
 
         # Force grid. Stored in column-major order.
         self.F = np.zeros((self.w, self.h, 2))
-        self.F[20:22,:,1] = -0.01
-        # self.F[:,:,1] = -0.01
+        self.F[int(self.w/2)-2:int(self.w/2)+2,:,1] = -0.01
 
         # Time counter.
         self.t = 0
         # Time step.
         self.dt = dt
+
+        # Viscosity.
+        self.viscosity = 0.001
 
     def step(self):
         # Run through all our velocity updates.
@@ -37,9 +39,9 @@ class Smoke():
         self.v = self.advect(self.v, 2, 0.0, 'linear')
         self.v = self.impose_boundary(self.v, 2, 'collision')
 
-        # self.v = self.diffuse(self.v, 0.0, 2, 'collision')
-        # self.v = self.impose_boundary(self.v, 2, 'collision')
-        #
+        self.v = self.diffuse(self.v, self.viscosity, 2, 'collision')
+        self.v = self.impose_boundary(self.v, 2, 'collision')
+
         self.v = self.project(self.v)
         self.v = self.impose_boundary(self.v, 2, 'collision')
 
