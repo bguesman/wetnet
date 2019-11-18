@@ -93,7 +93,6 @@ class Smoke():
             v_new = self.impose_boundary(v_new, dim, boundary_type)
         return v_new
 
-    # TODO: seems to be biased toward positive grid edges in some way?
     def project(self, v):
         div = np.zeros((self.w, self.h))
         p = np.zeros((self.w, self.h))
@@ -138,10 +137,7 @@ class Smoke():
         return point[0] >= 0.0 and point[1] >= 0.0 \
             and point[0] <= self.w - 1 and point[1] <= self.h - 1
 
-    # TODO: vectorize.
     def impose_boundary(self, data, dim, type):
-        if (type == 'zero'):
-            data[:,[0,-1]] = data[[0,-1]] = np.zeros(dim)
         if (type == 'same'):
             # Left and right columns.
             data[0, :] = data[1, :]
@@ -154,16 +150,6 @@ class Smoke():
             data[-1,-1] = 0.5 * (data[-2,-1] + data[-1,-2])
             data[0,-1] = 0.5 * (data[0,-2] + data[1,-1])
             data[-1,0] = 0.5 * (data[-2,0] + data[1,-1])
-        if (type == 'no_slip'):
-            assert (dim == 2)
-            # Left and right columns.
-            for y in range(self.h):
-                data[0, y] = np.array([0, data[1, y][1]])
-                data[-1, y] = np.array([0, data[-2, y][1]])
-            # Top and bottom rows.
-            for x in range(self.w):
-                data[x, 0] = np.array([data[x, 1][0], 0])
-                data[x, -1] = np.array([data[x, -2][0], 0])
         if (type == 'collision'):
             assert (dim == 2)
             # Left and right columns.
