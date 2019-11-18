@@ -85,8 +85,8 @@ class Smoke():
                 save_d.append(d_transpose)
             save_d = np.array(save_d)
             save_v = self.v[..., np.newaxis]
-            np.savez("/Users/purvigoel/Desktop/dl/final/neural-flow-style/data/waterfall/d/001", x=save_d)
-            np.savez("/Users/purvigoel/Desktop/dl/final/neural-flow-style/data/waterfall/v/001", x=save_v)
+            np.savez("smoke_style_transfer/data/waterfall/d/001", x=save_d)
+            np.savez("smoke_style_transfer/data/waterfall/v/001", x=save_v)
         # Update timestep.
         self.t += self.dt
         return np.transpose(self.d[1:-1,1:-1])
