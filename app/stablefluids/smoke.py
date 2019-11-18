@@ -78,6 +78,15 @@ class Smoke():
         self.d = self.advect(self.d, 1, 0.0, 'linear')
         self.d = self.impose_boundary(self.d, 1, 'same')
 
+        if(self.t  == 150):
+            save_d = []
+            d_transpose =np.transpose(self.d[1:-1,1:-1])
+            for i in range(202):
+                save_d.append(d_transpose)
+            save_d = np.array(save_d)
+            save_v = self.v[..., np.newaxis]
+            np.savez("/Users/purvigoel/Desktop/dl/final/neural-flow-style/data/waterfall/d/001", x=save_d)
+            np.savez("/Users/purvigoel/Desktop/dl/final/neural-flow-style/data/waterfall/v/001", x=save_v)
         # Update timestep.
         self.t += self.dt
         return np.transpose(self.d[1:-1,1:-1])
