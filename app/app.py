@@ -2,6 +2,7 @@ from OpenGL.GL import *
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
 import numpy as np
+import datetime
 from stablefluids.smoke import Smoke
 from render.renderer import Renderer
 
@@ -26,7 +27,7 @@ class TexRenderer():
 		self.h = h
 
 		# Simulation object.
-		self.sim = Smoke(30, 30)
+		self.sim = Smoke(200, 200)
 
 		# Renderer for the sim.
 		self.renderer = Renderer(self.w, self.h)

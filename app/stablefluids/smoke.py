@@ -1,9 +1,11 @@
 import numpy as np
 import scipy.interpolate
+from scipy import ndimage
+import datetime
 
 class Smoke():
 
-    def __init__(self, w, h, dt=3):
+    def __init__(self, w, h, dt=1):
         # Grid width and height. Pad with dummy cells for boundary conditions.
         self.w = w+2
         self.h = h+2
@@ -14,14 +16,18 @@ class Smoke():
 
         # Density sources.
         self.sources = np.zeros((self.w, self.h))
-        self.sources[int(self.w/2)-1:int(self.w/2)+1,int(self.h/2)-1:int(self.h/2)+1] = 0.3
+        self.sources[int(self.w/2)-15:int(self.w/2)+15,int(self.h/2)-15:int(self.h/2)+15] = 0.3 * np.random.rand(30, 30)
 
         # Velocity grid. Stored in column-major order.
         self.v = np.zeros((self.w, self.h, 2))
 
         # Force grid. Stored in column-major order.
         self.F = np.zeros((self.w, self.h, 2))
-        self.F[int(self.w/2)-2:int(self.w/2)+2,:,1] = -0.01
+
+        # self.F[int(self.w/2)-15:int(self.w/2)+15,:,1] = 0.1 * (np.random.rand(30, 202) - 1)
+        # self.F[int(self.w/2)-15:int(self.w/2)+15,:,0] = 0.1 * (np.random.rand(30, 202) - 0.5)
+        self.F[int(self.w/2)-15:int(self.w/2)+15,int(self.w/2)-15:int(self.w/2)+15,1] = 0.4 * (np.random.rand(30, 30) - 1)
+        self.F[:,:,0] = 0.2 * (np.random.rand(202, 202) - 0.5)
 
         # Time counter.
         self.t = 0
@@ -31,18 +37,39 @@ class Smoke():
         # Viscosity.
         self.viscosity = 0.001
 
+        # Number of iterations to use when performing diffusion and
+        # projection steps.
+        self.num_steps = 10
+
     def step(self):
+        self.sources[int(self.w/2)-15:int(self.w/2)+15,int(self.h/2)-15:int(self.h/2)+15] = 0.1 * np.random.rand(30, 30)
+        # self.F[int(self.w/2)-15:int(self.w/2)+15,:,1] = 0.1 * (np.random.rand(30, 202) - 1)
+        # self.F[int(self.w/2)-15:int(self.w/2)+15,:,0] = 1 * (np.random.rand(30, 202) - 0.5)
+        self.F[int(self.w/2)-15:int(self.w/2)+15,int(self.w/2)-15:int(self.w/2)+15,1] = 0.4 * (np.random.rand(30, 30) - 1)
+        self.F[:,:,0] = 0.2 * (np.random.rand(202, 202) - 0.5)
         # Run through all our velocity updates.
+        # start = datetime.datetime.now()
         self.v = self.add_force(self.v, self.F)
+        # end = datetime.datetime.now()
+        # print("addforce time:", end.microsecond - start.microsecond)
         self.v = self.impose_boundary(self.v, 2, 'collision')
 
+        # start = datetime.datetime.now()
         self.v = self.advect(self.v, 2, 0.0, 'linear')
+        # end = datetime.datetime.now()
+        # print("advect time:", end.microsecond - start.microsecond)
         self.v = self.impose_boundary(self.v, 2, 'collision')
 
+        # start = datetime.datetime.now()
         self.v = self.diffuse(self.v, self.viscosity, 2, 'collision')
+        # end = datetime.datetime.now()
+        # print("diffuse time:", end.microsecond - start.microsecond)
         self.v = self.impose_boundary(self.v, 2, 'collision')
 
+        # start = datetime.datetime.now()
         self.v = self.project(self.v)
+        # end = datetime.datetime.now()
+        # print("project time:", end.microsecond - start.microsecond)
         self.v = self.impose_boundary(self.v, 2, 'collision')
 
         # Run through all our density updates.
@@ -74,9 +101,19 @@ class Smoke():
             backtraced_locations = np.abs(backtraced_locations)
 
         # Sample the velocity at those points, set it to the new velocity.
-        interpolated = scipy.interpolate.griddata(grid.reshape(-1,2),
-            data.reshape(-1, dim), (backtraced_locations[:,:,0], backtraced_locations[:,:,1]),# backtraced_locations.reshape(-1,2),
-            method=interp_method, fill_value=fill)
+        # interpolated = scipy.interpolate.griddata(grid.reshape(-1,2),
+        #     data.reshape(-1, dim), (backtraced_locations[:,:,0], backtraced_locations[:,:,1]),# backtraced_locations.reshape(-1,2),
+        #     method=interp_method, fill_value=fill)
+        backtraced_locations_reshaped = backtraced_locations.reshape(-1,2).transpose()
+        if (dim == 2):
+            interpolated_x = ndimage.map_coordinates(data[:,:,0],
+                backtraced_locations_reshaped, order=1, mode='constant', cval=fill)
+            interpolated_y = ndimage.map_coordinates(data[:,:,1],
+                backtraced_locations_reshaped, order=1, mode='constant', cval=fill)
+            interpolated = np.stack([interpolated_x, interpolated_y], axis=-1)
+        else:
+            interpolated = ndimage.map_coordinates(data,
+                backtraced_locations_reshaped, order=1, mode='constant', cval=fill)
 
         # Make sure to reshape back to a grid!
         interpolated = interpolated.reshape(data.shape)
@@ -86,7 +123,7 @@ class Smoke():
     def diffuse(self, v, rate, dim, boundary_type):
         a = self.dt * rate
         v_new = np.zeros(v.shape)
-        for i in range(20):
+        for i in range(self.num_steps):
             v_new[1:-1,1:-1] = (1.0 / (4.0 * a + 1.0)) * \
                 (a*(v_new[2:,1:-1] + v_new[0:-2,1:-1]
                 + v_new[1:-1,2:] + v_new[1:-1,0:-2]) + v[1:-1,1:-1])
@@ -109,7 +146,7 @@ class Smoke():
         div = self.impose_boundary(div, 1, 'same')
 
         # Projection iteration.
-        for i in range(20):
+        for i in range(self.num_steps):
             p[1:-1,1:-1] = 0.25 * (p[1:-1,2:] + p[1:-1,0:-2] + p[2:,1:-1] \
                 + p[0:-2, 1:-1] - div[1:-1,1:-1])
 
