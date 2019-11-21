@@ -28,7 +28,7 @@ class TexRenderer():
 		self.h = h
 
 		# Simulation object.
-		self.sim = ParticleSmoke(200, 200)
+		self.sim = ParticleSmoke(100, 100)
 
 		# Renderer for the sim.
 		self.renderer = Renderer(self.w, self.h)

@@ -5,7 +5,7 @@ import datetime
 
 class ParticleSmoke():
 
-    def __init__(self, w, h, n_particles=40000, dt=1):
+    def __init__(self, w, h, n_particles=5000, dt=1.5):
         # Grid width and height. Pad with dummy cells for boundary conditions.
         self.w = w+2
         self.h = h+2
@@ -18,8 +18,9 @@ class ParticleSmoke():
         # velocity is a grid.
         self.n_particles = n_particles
         self.p = np.zeros((n_particles, 2))
-        self.p[:,0] = int(self.w/2) + 20 * (np.random.rand(n_particles) - 0.5)
-        self.p[:,1] = self.h - 1 - 20 * (np.random.rand(n_particles))
+        self.p[:,0] = int(self.w/2) + 50 * (np.random.rand(n_particles) - 0.5)
+        # self.p[:,1] = self.h - 3 - 50 * (np.random.rand(n_particles))
+        self.p[:,1] = 1 + 50 * (np.random.rand(n_particles))
 
         # Density sources.
         self.sources = np.zeros((self.w, self.h))
@@ -33,7 +34,9 @@ class ParticleSmoke():
         # Force grid. Stored in column-major order.
         self.F = np.zeros((self.w, self.h, 2))
 
-        self.F[int(self.w/2)-15:int(self.w/2)+15,-30:,1] = -0.1
+        # self.F[int(self.w/2)-15:int(self.w/2)+15,-30:,1] = -0.1
+        self.F[:,:,1] = 0.1
+        # self.F[:,:,0] = 10 * (np.random.rand(self.w, self.h) - 0.5)
 
         # Time counter.
         self.t = 0
@@ -41,7 +44,7 @@ class ParticleSmoke():
         self.dt = dt
 
         # Viscosity.
-        self.viscosity = 0.01
+        self.viscosity = 0.1
 
         # Vorticity confinement weight.
         self.epsilon = 0.01
@@ -52,41 +55,57 @@ class ParticleSmoke():
 
     def step(self):
 
-        # Run through all our velocity updates.
-        # start = datetime.datetime.now()
-        self.v = self.add_force(self.v, self.F)
-        # end = datetime.datetime.now()
-        # print("addforce time:", end.microsecond - start.microsecond)
-        self.v = self.impose_boundary(self.v, 2, 'collision')
+        # self.F[:,:,1] = -0.05
+        # self.F[:,:,1] = 0
 
-        # Add vorticity confinement force.
-        self.v = self.vorticity_confinement(self.v)
-        self.v = self.impose_boundary(self.v, 2, 'collision')
+        # if (self.t > 150 and self.t % 100 == 0):
+            # self.F[40:60,:,1] = 10 * (np.random.rand(20, self.h))
+
+        # self.F[:,:,0] = 1 * (np.random.rand(self.w, self.h) - 0.5)
 
         # start = datetime.datetime.now()
         self.v = self.advect(self.v, 2, 0.0, 'linear')
         # end = datetime.datetime.now()
         # print("advect time:", end.microsecond - start.microsecond)
-        self.v = self.impose_boundary(self.v, 2, 'collision')
+        self.v = self.impose_boundary(self.v, 2, 'zero')
+
+        # Run through all our velocity updates.
+        # start = datetime.datetime.now()
+        self.v = self.add_force(self.v, self.F)
+        # end = datetime.datetime.now()
+        # print("addforce time:", end.microsecond - start.microsecond)
+        self.v = self.impose_boundary(self.v, 2, 'zero')
+
+        # Add vorticity confinement force.
+        # self.v = self.vorticity_confinement(self.v)
+        # self.v = self.impose_boundary(self.v, 2, 'collision')
 
         # start = datetime.datetime.now()
-        self.v = self.diffuse(self.v, self.viscosity, 2, 'collision')
+        # self.v = self.diffuse(self.v, self.viscosity, 2, 'collision')
         # end = datetime.datetime.now()
         # print("diffuse time:", end.microsecond - start.microsecond)
-        self.v = self.impose_boundary(self.v, 2, 'collision')
+        # self.v = self.impose_boundary(self.v, 2, 'collision')
 
         # start = datetime.datetime.now()
         self.v = self.project(self.v)
         # end = datetime.datetime.now()
         # print("project time:", end.microsecond - start.microsecond)
-        self.v = self.impose_boundary(self.v, 2, 'collision')
+        self.v = self.impose_boundary(self.v, 2, 'zero')
 
         # Run through all our density updates.
         self.p = self.advect_particles(self.p, self.v)
-        self.d = self.particles_to_density(self.p)
+        self.d = 0.5 * self.particles_to_density(self.p)
 
         # Update timestep.
         self.t += self.dt
+
+        count = 0
+        for i in range(self.n_particles):
+            if (self.p[i,0] < 1 or self.p[i,0] > self.w-2 or
+                self.p[i,1] < 1 or self.p[i,1] > self.h-2):
+                count += 1
+
+        print(count)
 
         return np.transpose(self.d[1:-1,1:-1])
 
@@ -112,13 +131,13 @@ class ParticleSmoke():
         backtraced_locations_reshaped = backtraced_locations.reshape(-1,2).transpose()
         if (dim == 2):
             interpolated_x = ndimage.map_coordinates(data[:,:,0],
-                backtraced_locations_reshaped, order=1, mode='constant', cval=fill)
+                backtraced_locations_reshaped, order=3, mode='constant', cval=fill)
             interpolated_y = ndimage.map_coordinates(data[:,:,1],
-                backtraced_locations_reshaped, order=1, mode='constant', cval=fill)
+                backtraced_locations_reshaped, order=3, mode='constant', cval=fill)
             interpolated = np.stack([interpolated_x, interpolated_y], axis=-1)
         else:
             interpolated = ndimage.map_coordinates(data,
-                backtraced_locations_reshaped, order=1, mode='constant', cval=fill)
+                backtraced_locations_reshaped, order=3, mode='constant', cval=fill)
 
         # Make sure to reshape back to a grid!
         interpolated = interpolated.reshape(data.shape)
@@ -140,6 +159,14 @@ class ParticleSmoke():
         p = np.zeros((self.w, self.h))
         div[1:-1,1:-1] = 0.5 * (v[1:-1,2:,1] - v[1:-1,0:-2,1] \
             + v[2:,1:-1,0] - v[0:-2,1:-1,0])
+
+        # Volume conservation. THIS IS A CRUDE HACK.
+        # Neighborhood density estimate?
+        max_density = 3
+        k = 0.5
+        volume_conserve = self.particles_to_density(self.p) - max_density
+        volume_conserve[volume_conserve < 0] = 0
+        div -= np.sqrt(k*volume_conserve)
         div = self.impose_boundary(div, 1, 'same')
 
         # Projection iteration.
@@ -224,10 +251,6 @@ class ParticleSmoke():
         return data
 
     def advect_particles(self, p, v):
-        # for i in range(self.n_particles):
-        #     p[i] += v[int(p[i,0]), int(p[i, 1])] * self.dt
-        #     p[i] = np.abs(p[i])
-        # return p
         # Sample velocity grid at particle positions.
         interpolated_x = ndimage.map_coordinates(v[:,:,0],
             p.transpose(), order=1, mode='constant', cval=0.0)
@@ -236,20 +259,33 @@ class ParticleSmoke():
         p[:,0] += interpolated_x * self.dt
         p[:,1] += interpolated_y * self.dt
 
+        # This was wrong.
+        # left_boundary = p[:,0] < 1
+        # bottom_boundary = p[:,1] < 1
+        # p[left_boundary,0] = 1 + (1 - (p[left_boundary,0]))
+        # p[bottom_boundary,1] = 1 + (1 - (p[bottom_boundary,1]))
+
+        # right_boundary = p[:,0] > self.w-1
+        # top_boundary = p[:,1] > self.h-1
+        # p[right_boundary,0] -= p[right_boundary,0] - (self.w-1)
+        # p[top_boundary,1] -= p[top_boundary,1] - (self.h-1)
+
+        # Collisions are INELASTIC, so this is correct:
         left_boundary = p[:,0] < 1
         bottom_boundary = p[:,1] < 1
-        p[left_boundary,0] = 1 + (1 - (p[left_boundary,0]))
-        p[bottom_boundary,1] = 1 + (1 - (p[bottom_boundary,1]))
+        p[left_boundary,0] = 1
+        p[bottom_boundary,1] = 1
 
-        right_boundary = p[:,0] > self.w
-        top_boundary = p[:,1] > self.h
-        p[right_boundary,0] = p[right_boundary,0] - (self.w)
-        p[top_boundary,1] = p[top_boundary,1] - (self.h)
+        right_boundary = p[:,0] > self.w-2
+        top_boundary = p[:,1] > self.h-2
+        p[right_boundary,0] = self.w-2
+        p[top_boundary,1] = self.h-2
+
 
         return p
 
     def particles_to_density(self, p):
         d = np.zeros((self.w, self.h))
-        for i in range(self.n_particles):
-            d[int(p[i,0]), int(p[i, 1])] += 0.1
+        unique, counts = np.unique(p.astype(int), return_counts=True, axis=0)
+        d[unique[:,0], unique[:,1]] += counts
         return d

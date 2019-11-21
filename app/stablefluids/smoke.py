@@ -26,7 +26,8 @@ class Smoke():
         # Force grid. Stored in column-major order.
         self.F = np.zeros((self.w, self.h, 2))
 
-        self.F[int(self.w/2)-15:int(self.w/2)+15,-30:,1] = -0.1
+        # self.F[int(self.w/2)-15:int(self.w/2)+15,-30:,1] = -0.1
+        self.F[:,:,1] = -0.05
 
         # Time counter.
         self.t = 0
@@ -81,15 +82,15 @@ class Smoke():
         self.d = self.advect(self.d, 1, 0.0, 'linear')
         self.d = self.impose_boundary(self.d, 1, 'zero')
 
-        if(self.t  == 150):
-            save_d = []
-            d_transpose =np.transpose(self.d[1:-1,1:-1])
-            for i in range(202):
-                save_d.append(d_transpose)
-            save_d = np.array(save_d)
-            save_v = self.v[..., np.newaxis]
-            np.savez("smoke_style_transfer/data/waterfall/d/001", x=save_d)
-            np.savez("smoke_style_transfer/data/waterfall/v/001", x=save_v)
+        # if(self.t  == 150):
+        #     save_d = []
+        #     d_transpose =np.transpose(self.d[1:-1,1:-1])
+        #     for i in range(202):
+        #         save_d.append(d_transpose)
+        #     save_d = np.array(save_d)
+        #     save_v = self.v[..., np.newaxis]
+        #     np.savez("smoke_style_transfer/data/waterfall/d/001", x=save_d)
+        #     np.savez("smoke_style_transfer/data/waterfall/v/001", x=save_v)
         # Update timestep.
         self.t += self.dt
         return np.transpose(self.d[1:-1,1:-1])
@@ -223,6 +224,6 @@ class Smoke():
             data[0,:] = np.stack([-data[1,:,0], data[1,:,1]], axis=-1)
             data[-1,:] = np.stack([-data[-2,:,0], data[-2,:,1]], axis=-1)
             # Top and bottom rows.
-            data[:,0] = np.stack([data[:,1,0], -data[:,1,1]], axis=-1)
-            data[:,-1] = np.stack([data[:,-2,0], -data[:,-2,1]], axis=-1)
+            data[:,0] = np.stack([-data[:,1,0], -data[:,1,1]], axis=-1)
+            data[:,-1] = np.stack([-data[:,-2,0], -data[:,-2,1]], axis=-1)
         return data
