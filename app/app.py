@@ -4,6 +4,7 @@ from OpenGL.GLU import *
 import numpy as np
 import datetime
 from stablefluids.smoke import Smoke
+from water.particle_smoke import ParticleSmoke
 from render.renderer import Renderer
 
 class TexRenderer():
@@ -27,7 +28,7 @@ class TexRenderer():
 		self.h = h
 
 		# Simulation object.
-		self.sim = Smoke(200, 200)
+		self.sim = ParticleSmoke(200, 200)
 
 		# Renderer for the sim.
 		self.renderer = Renderer(self.w, self.h)

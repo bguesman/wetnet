@@ -3,9 +3,9 @@ import scipy.interpolate
 from scipy import ndimage
 import datetime
 
-class Smoke():
+class ParticleSmoke():
 
-    def __init__(self, w, h, dt=1):
+    def __init__(self, w, h, n_particles=40000, dt=1):
         # Grid width and height. Pad with dummy cells for boundary conditions.
         self.w = w+2
         self.h = h+2
@@ -14,11 +14,18 @@ class Smoke():
         # 1st dimension = x coordinate, second dimension = y coordinate.
         self.d = np.zeros((self.w, self.h))
 
+        # Particle list. Each particle has only a position, since our
+        # velocity is a grid.
+        self.n_particles = n_particles
+        self.p = np.zeros((n_particles, 2))
+        self.p[:,0] = int(self.w/2) + 20 * (np.random.rand(n_particles) - 0.5)
+        self.p[:,1] = self.h - 1 - 20 * (np.random.rand(n_particles))
+
         # Density sources.
         self.sources = np.zeros((self.w, self.h))
         # self.sources[0:int(self.w),0:int(self.h/2)] = 0.3 * np.random.rand(int(self.w), int(self.h/2))
         # self.sources[int(self.w/2)-15:int(self.w/2)+15,int(self.h/2)-15:int(self.h/2)+15] = 1 * np.random.rand(30, 30)
-        self.sources[int(self.w/2)-15:int(self.w/2)+15,-30:] = 10 * np.random.rand(30, 30)
+        # self.sources[int(self.w/2)-15:int(self.w/2)+15,0:30] = 10 * np.random.rand(30, 30)
 
         # Velocity grid. Stored in column-major order.
         self.v = np.zeros((self.w, self.h, 2))
@@ -75,14 +82,12 @@ class Smoke():
         self.v = self.impose_boundary(self.v, 2, 'collision')
 
         # Run through all our density updates.
-        self.d = self.add_force(self.d, self.sources)
-        self.sources = np.zeros((self.w, self.h))
-
-        self.d = self.advect(self.d, 1, 0.0, 'linear')
-        self.d = self.impose_boundary(self.d, 1, 'zero')
+        self.p = self.advect_particles(self.p, self.v)
+        self.d = self.particles_to_density(self.p)
 
         # Update timestep.
         self.t += self.dt
+
         return np.transpose(self.d[1:-1,1:-1])
 
     def add_force(self, data, force):
@@ -217,3 +222,34 @@ class Smoke():
             data[:,0] = np.stack([data[:,1,0], -data[:,1,1]], axis=-1)
             data[:,-1] = np.stack([data[:,-2,0], -data[:,-2,1]], axis=-1)
         return data
+
+    def advect_particles(self, p, v):
+        # for i in range(self.n_particles):
+        #     p[i] += v[int(p[i,0]), int(p[i, 1])] * self.dt
+        #     p[i] = np.abs(p[i])
+        # return p
+        # Sample velocity grid at particle positions.
+        interpolated_x = ndimage.map_coordinates(v[:,:,0],
+            p.transpose(), order=1, mode='constant', cval=0.0)
+        interpolated_y = ndimage.map_coordinates(v[:,:,1],
+            p.transpose(), order=1, mode='constant', cval=0.0)
+        p[:,0] += interpolated_x * self.dt
+        p[:,1] += interpolated_y * self.dt
+
+        left_boundary = p[:,0] < 1
+        bottom_boundary = p[:,1] < 1
+        p[left_boundary,0] = 1 + (1 - (p[left_boundary,0]))
+        p[bottom_boundary,1] = 1 + (1 - (p[bottom_boundary,1]))
+
+        right_boundary = p[:,0] > self.w
+        top_boundary = p[:,1] > self.h
+        p[right_boundary,0] = p[right_boundary,0] - (self.w)
+        p[top_boundary,1] = p[top_boundary,1] - (self.h)
+
+        return p
+
+    def particles_to_density(self, p):
+        d = np.zeros((self.w, self.h))
+        for i in range(self.n_particles):
+            d[int(p[i,0]), int(p[i, 1])] += 0.1
+        return d
