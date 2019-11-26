@@ -18,7 +18,7 @@ class Smoke():
         self.sources = np.zeros((self.w, self.h))
         # self.sources[0:int(self.w),0:int(self.h/2)] = 0.3 * np.random.rand(int(self.w), int(self.h/2))
         # self.sources[int(self.w/2)-15:int(self.w/2)+15,int(self.h/2)-15:int(self.h/2)+15] = 1 * np.random.rand(30, 30)
-        self.sources[int(self.w/2)-15:int(self.w/2)+15,-30:] = 10 * np.random.rand(30, 30)
+        self.sources[int(self.w/2)-5:int(self.w/2)+5,-10:] = 0.02/30 * np.random.rand(10, 10)
 
         # Velocity grid. Stored in column-major order.
         self.v = np.zeros((self.w, self.h, 2))
@@ -26,8 +26,8 @@ class Smoke():
         # Force grid. Stored in column-major order.
         self.F = np.zeros((self.w, self.h, 2))
 
-        # self.F[int(self.w/2)-15:int(self.w/2)+15,-30:,1] = -0.1
-        self.F[:,:,1] = -0.05
+        self.F[int(self.w/2)-5:int(self.w/2)+5,-10:,1] = -0.05/3
+        # self.F[:,:,1] = -0.05
 
         # Time counter.
         self.t = 0
@@ -35,10 +35,10 @@ class Smoke():
         self.dt = dt
 
         # Viscosity.
-        self.viscosity = 0.01
+        self.viscosity = 0.1
 
         # Vorticity confinement weight.
-        self.epsilon = 0.01
+        self.epsilon = 0.1
 
         # Number of iterations to use when performing diffusion and
         # projection steps.
@@ -46,51 +46,56 @@ class Smoke():
 
     def step(self):
 
+        self.sources[int(self.w/2)-5:int(self.w/2)+5,-10:] = 0.03 * np.random.rand(10, 10)
+
         # Run through all our velocity updates.
-        # start = datetime.datetime.now()
+        start = datetime.datetime.now()
         self.v = self.add_force(self.v, self.F)
-        # end = datetime.datetime.now()
-        # print("addforce time:", end.microsecond - start.microsecond)
+        end = datetime.datetime.now()
+        print("addforce time:", end.microsecond - start.microsecond)
         self.v = self.impose_boundary(self.v, 2, 'collision')
 
         # Add vorticity confinement force.
+        start = datetime.datetime.now()
         self.v = self.vorticity_confinement(self.v)
+        end = datetime.datetime.now()
+        print("vorticity confinement time:", end.microsecond - start.microsecond)
         self.v = self.impose_boundary(self.v, 2, 'collision')
 
-        # start = datetime.datetime.now()
+        start = datetime.datetime.now()
         self.v = self.advect(self.v, 2, 0.0, 'linear')
-        # end = datetime.datetime.now()
-        # print("advect time:", end.microsecond - start.microsecond)
+        end = datetime.datetime.now()
+        print("advect time:", end.microsecond - start.microsecond)
         self.v = self.impose_boundary(self.v, 2, 'collision')
 
-        # start = datetime.datetime.now()
+        start = datetime.datetime.now()
         self.v = self.diffuse(self.v, self.viscosity, 2, 'collision')
-        # end = datetime.datetime.now()
-        # print("diffuse time:", end.microsecond - start.microsecond)
+        end = datetime.datetime.now()
+        print("diffuse time:", end.microsecond - start.microsecond)
         self.v = self.impose_boundary(self.v, 2, 'collision')
 
-        # start = datetime.datetime.now()
+        start = datetime.datetime.now()
         self.v = self.project(self.v)
-        # end = datetime.datetime.now()
-        # print("project time:", end.microsecond - start.microsecond)
+        end = datetime.datetime.now()
+        print("project time:", end.microsecond - start.microsecond)
         self.v = self.impose_boundary(self.v, 2, 'collision')
 
         # Run through all our density updates.
         self.d = self.add_force(self.d, self.sources)
-        self.sources = np.zeros((self.w, self.h))
+        # self.sources = np.zeros((self.w, self.h))
 
         self.d = self.advect(self.d, 1, 0.0, 'linear')
         self.d = self.impose_boundary(self.d, 1, 'zero')
 
-        # if(self.t  == 150):
-        #     save_d = []
-        #     d_transpose =np.transpose(self.d[1:-1,1:-1])
-        #     for i in range(202):
-        #         save_d.append(d_transpose)
-        #     save_d = np.array(save_d)
-        #     save_v = self.v[..., np.newaxis]
-        #     np.savez("smoke_style_transfer/data/waterfall/d/001", x=save_d)
-        #     np.savez("smoke_style_transfer/data/waterfall/v/001", x=save_v)
+        save_d = []
+        d_transpose =np.transpose(self.d[1:-1,1:-1])
+        for i in range(202):
+            save_d.append(d_transpose)
+        save_d = np.array(save_d)
+        save_v = self.v[..., np.newaxis]
+        np.savez("smoke_style_transfer/data/waterfall/d/001", x=save_d)
+        np.savez("smoke_style_transfer/data/waterfall/v/001", x=save_v)
+
         # Update timestep.
         self.t += self.dt
         return np.transpose(self.d[1:-1,1:-1])

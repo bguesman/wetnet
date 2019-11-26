@@ -4,6 +4,8 @@ from OpenGL.GLU import *
 import numpy as np
 import datetime
 from stablefluids.smoke import Smoke
+from stablefluids.smokemultires import SmokeMultiRes
+from water.water import Water
 from water.particle_smoke import ParticleSmoke
 from render.renderer import Renderer
 
@@ -22,16 +24,26 @@ class TexRenderer():
 		# Set our draw loop to the display function.
 		glutDisplayFunc(self.drawLoop)
 		glutIdleFunc(self.drawLoop)
+		glutMotionFunc(self.mouseControl)
+		glutMouseFunc(self.mouseReleased)
 
-		# Width and height of the sim.
+		# Width and height of the window.
 		self.w = w
 		self.h = h
 
+		# Width and height of the sim.
+		self.sim_w = 300
+		self.sim_h = 300
+
+		# Mouse position.
+		self.mouse_x = None
+		self.mouse_y = None
+
 		# Simulation object.
-		self.sim = ParticleSmoke(100, 100)
+		self.sim = SmokeMultiRes(self.sim_w, self.sim_h)
 
 		# Renderer for the sim.
-		self.renderer = Renderer(self.w, self.h)
+		self.renderer = Renderer(self.sim_w, self.sim_h)
 
 		# Render the first frame of the sim, set it to our active texture.
 		# Texture will be in row major order.
@@ -98,6 +110,33 @@ class TexRenderer():
 		glTexCoord2f(1, 0)
 		glVertex2f(self.w, 0)
 		glEnd()
+
+	def mouseControl(self, mx, my):
+
+		mx = mx
+		my = self.h - my
+
+		if (self.mouse_x == None or self.mouse_y == None):
+			self.mouse_x = mx
+			self.mouse_y = my
+			return
+
+		dx = mx - self.mouse_x
+		dy = my - self.mouse_y
+
+		xloc = int((mx/self.w)*self.sim_w)
+		yloc = int((my/self.h)*self.sim_h)
+
+		self.sim.F_mouse[max(xloc-3,0):min(xloc+3, self.sim_w-1), \
+			max(yloc-3,0):min(yloc+3, self.sim_h-1)] += 1 * np.array([dx, dy])
+
+		self.mouse_x = mx
+		self.mouse_y = my
+
+	def mouseReleased(self, button, state, x, y):
+		if (state == GLUT_UP):
+			self.mouse_x = None
+			self.mouse_y = None
 
 	def run(self):
 		glutMainLoop()
