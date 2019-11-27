@@ -6,78 +6,123 @@ import cv2
 
 class Smoke():
 
-    def __init__(self, w, h, dt=1, save_data=False, path=""):
-        # Grid width and height. Pad with dummy cells for boundary conditions.
-        self.w = w+2
-        self.h = h+2
+    def __init__(self, w, h, dt=2, save_data=False, path=""):
 
-        # Density grid. Stored in column-major order.
-        # 1st dimension = x coordinate, second dimension = y coordinate.
-        self.d = np.zeros((self.w, self.h))
+        ####################### METADATA #######################
 
-        # Density sources.
-        self.sources = np.zeros((self.w, self.h))
+        # Whether or not to write the results of this simulation
+        # to file.
+        self.save_data = save_data
+        # Path to write to if self.save_data=True.
+        self.path = path
 
-        # Velocity grid. Stored in column-major order.
-        self.v = np.zeros((self.w, self.h, 2))
-
-        # Force grid. Stored in column-major order.
-        self.F = np.zeros((self.w, self.h, 2))
-
-        # Force applied by mouse.
-        self.F_mouse = np.zeros((self.w, self.h, 2))
-
-        # Scales forces by appropriate amount given cell size.
-        # We assume "physical" width of the sim = 1.
-        # We use a constant factor of 1e-3 to allow the force values
-        # we set for gravity to seem reasonable.
-        self.force_scale = 1e-3 / (1.0/self.w)
-
-        # Time counter.
-        self.t = 0
-        # Time step.
-        self.dt = dt
-
-        # Viscosity.
-        self.viscosity = 0.001
-
-        # Vorticity confinement weight.
-        self.epsilon = 0.05
+        # Frame counter.
+        self.frame = 0
 
         # Number of iterations to use when performing diffusion and
         # projection steps.
         self.num_steps = 20
 
-        # Frame counter.
-        self.frame = 0
+        ##################### END METADATA #####################
 
-        # Metadata.
-        self.save_data = save_data
-        self.path = path
 
-        # Initializations.
-        # Random chunk of sources at the top.
-        self.flow_rate = 0.1
-        self.sources[int(self.w/2)-int(self.w/6):int(self.w/2)+int(self.w/6), \
-            -int(self.h/4):] = self.flow_rate * np.random.rand(2*int(self.w/6), \
-            int(self.h/4))
+        ######################## GRIDS #########################
 
-        # Gravity.
+        # NOTES:
+        #   - All grids are in column major order. I.e.,
+        #   1st dimension = x coordinate,
+        #   2nd dimension = y coordinate.
+        #   - All 2 dimensional quantities are stored [x, y].
+
+        # Width and height of grids. Pad with one layer of dummy
+        # cells for imposing boundary conditions.
+        self.w = w+2
+        self.h = h+2
+
+        # Time counter.
+        self.t = 0
+
+        # Fluid density.
+        self.d = np.zeros((self.w, self.h))
+
+        # Density sources.
+        self.sources = np.zeros((self.w, self.h))
+
+        # Fluid velocity.
+        self.v = np.zeros((self.w, self.h, 2))
+
+        # Non-mouse forces. Aka, "velocity sources".
+        self.F = np.zeros((self.w, self.h, 2))
+
+        # Force applied by mouse. Separated out so we can
+        # apply attenuation.
+        self.F_mouse = np.zeros((self.w, self.h, 2))
+
+        ###################### END GRIDS #######################
+
+
+        ################## PHYSICAL CONSTANTS ##################
+
+        # Time step.
+        self.dt = dt
+
+        # Gravitational force. To make this quantity scale
+        # properly with the fluid sim's size, we need to
+        # multiply it by the grid's scale, which we'll take
+        # to be the unit length.
+        self.g = -1e-4 * self.w
+
+        # Viscosity. In theory, should be scaled, but effect is
+        # negligible.
+        self.viscosity = 0.5
+
+        # Vorticity confinement weight. Also has to be scaled by
+        # width---technically a scaling factor on the force, but
+        # rolling it into epsilon is more convenient.
+        self.epsilon = 2e-4 * self.w
+
+        # Max flow rate of density sources.
+        self.flow_rate = 0.005
+
+        # Strength of the mouse force, again, multiplied by
+        # the grid's scale.
+        self.mouse_force = 3e-5 * self.w
+
+        # Controls how quickly the force applied by the mouse
+        # dissipates.
+        # 1 -> never.
+        # 0 -> immediately.
+        self.mouse_attenuation_factor = 0.95
+
+        # Radius of mouse's area of effect. In practice, this
+        # is a square grid, but radius is an ok way of thinking
+        # about it.
+        self.mouse_aoe_radius = int(0.03 * self.w)
+
+        ################ END PHYSICAL CONSTANTS ################
+
+
+        ###################### GRID SETUP ######################
+
+        self.randomize_density_source(self.flow_rate)
+
+        # Gravity, but only by the sources to avoid leakage.
         self.F[int(self.w/2)-int(self.w/6):int(self.w/2)+int(self.w/6), \
-            -int(self.h/4):,1] = -0.3
+            -int(self.h/4):,1] = self.g
+
+        #################### END GRID SETUP ####################
+
 
     def step(self):
 
         # Re-randomize sources.
-        self.sources[int(self.w/2)-int(self.w/6):int(self.w/2)+int(self.w/6), \
-            -int(self.h/4):] = self.flow_rate * np.random.rand(2*int(self.w/6), \
-            int(self.h/4))
+        self.randomize_density_source(self.flow_rate)
 
         # Run through all our velocity updates.
         self.F_mouse *= 0.9
         start = datetime.datetime.now()
-        self.add_force(self.v, self.F, self.force_scale)
-        self.add_force(self.v, self.F_mouse, self.force_scale)
+        self.add_force(self.v, self.F)
+        self.add_force(self.v, self.F_mouse)
         end = datetime.datetime.now()
         # print("addforce time:", end.microsecond - start.microsecond)
         self.impose_boundary(self.v, 2, 'collision')
@@ -110,7 +155,7 @@ class Smoke():
         self.impose_boundary(self.v, 2, 'collision')
 
         # Run through all our density updates.
-        self.add_force(self.d, self.sources, np.sqrt(self.force_scale))
+        self.add_force(self.d, self.sources)
 
         self.d = self.advect(self.d, 1, 0.0, 'linear')
         self.impose_boundary(self.d, 1, 'zero')
@@ -123,9 +168,9 @@ class Smoke():
         self.frame += 1
         return np.transpose(self.d[1:-1,1:-1])
 
-    def add_force(self, data, force, force_scale):
+    def add_force(self, data, force):
         # Just take one first order step.
-        data += force * force_scale * self.dt
+        data += force * self.dt
 
     def advect(self, data, dim, fill, interp_method, collision=True):
         # Get a grid of cell indices (cell center point locations).
@@ -145,13 +190,13 @@ class Smoke():
         backtraced_locations_reshaped = backtraced_locations.reshape(-1,2).transpose()
         if (dim == 2):
             interpolated_x = ndimage.map_coordinates(data[:,:,0],
-                backtraced_locations_reshaped, order=1, mode='constant', cval=fill)
+                backtraced_locations_reshaped, order=1, mode='constant', cval=fill, prefilter=True)
             interpolated_y = ndimage.map_coordinates(data[:,:,1],
-                backtraced_locations_reshaped, order=1, mode='constant', cval=fill)
+                backtraced_locations_reshaped, order=1, mode='constant', cval=fill, prefilter=True)
             interpolated = np.stack([interpolated_x, interpolated_y], axis=-1)
         else:
             interpolated = ndimage.map_coordinates(data,
-                backtraced_locations_reshaped, order=1, mode='constant', cval=fill)
+                backtraced_locations_reshaped, order=1, mode='constant', cval=fill, prefilter=True)
 
         # Make sure to reshape back to a grid!
         interpolated = interpolated.reshape(data.shape)
@@ -218,8 +263,8 @@ class Smoke():
         self.impose_boundary(centered_curl[1:-1,1:-1], 1, 'same')
         self.impose_boundary(centered_curl, 1, 'same')
 
-        v[:,:,0] += self.dt * dx * centered_curl * self.force_scale
-        v[:,:,1] += self.dt * dy * centered_curl * self.force_scale
+        v[:,:,0] += self.dt * dx * centered_curl
+        v[:,:,1] += self.dt * dy * centered_curl
 
     def in_bounds(self, point):
         return point[0] >= 0.0 and point[1] >= 0.0 \
@@ -250,3 +295,16 @@ class Smoke():
             # Top and bottom rows.
             data[:,0] = np.stack([-data[:,1,0], -data[:,1,1]], axis=-1)
             data[:,-1] = np.stack([-data[:,-2,0], -data[:,-2,1]], axis=-1)
+
+    def randomize_density_source(self, flow_rate):
+        self.sources[int(self.w/2)-int(self.w/6):int(self.w/2)+int(self.w/6), \
+            -int(self.h/4):] = flow_rate * np.random.rand(2*int(self.w/6), \
+            int(self.h/4))
+
+    def update_mouse_force(self, px, py, dx, dy):
+        x_low = max(px-self.mouse_aoe_radius,0)
+        x_high = min(px+self.mouse_aoe_radius, self.w-1-self.mouse_aoe_radius)
+        y_low = max(py-self.mouse_aoe_radius,0)
+        y_high = min(py+self.mouse_aoe_radius, self.h-1-self.mouse_aoe_radius)
+        self.F_mouse[x_low:x_high, y_low:y_high] += \
+            self.mouse_force * np.array([dx, dy])

@@ -11,7 +11,8 @@ from render.renderer import Renderer
 
 class TexRenderer():
 
-	def __init__(self, w, h, mode="RUN", path=""):
+	def __init__(self, window_w, window_h, sim_w, sim_h,
+		mode="RUN", path="", lo_res_scale=0.2):
 
 		# Set member variables from initialization parameters.
 
@@ -29,8 +30,8 @@ class TexRenderer():
 		self.mode = mode
 		self.path = path
 		# Width and height of the window.
-		self.w = w
-		self.h = h
+		self.w = window_w
+		self.h = window_h
 
 		# Wrapper for OpenGL initialization calls.
 		self.initOpenGL()
@@ -40,8 +41,8 @@ class TexRenderer():
 		self.mouse_y = None
 
 		# Width and height of the sim.
-		self.sim_w = 100
-		self.sim_h = 100
+		self.sim_w = sim_w
+		self.sim_h = sim_h
 
 		if (self.mode == "VIEW"):
 			# We need no renderer for this sim! But we do
@@ -54,8 +55,8 @@ class TexRenderer():
 			self.sim = Smoke(self.sim_w, self.sim_h, \
 				save_data=True, path=self.path+"/hi_res/")
 			# Low res sim parameters
-			self.lr_w = self.sim_w/5
-			self.lr_h = self.sim_h/5
+			self.lr_w = self.sim_w * lo_res_scale
+			self.lr_h = self.sim_h * lo_res_scale
 			self.low_res_sim = Smoke(int(self.lr_w), int(self.lr_h), \
 				save_data=True, path=self.path+"/lo_res/")
 		elif (self.mode == "RUN"):
@@ -191,15 +192,17 @@ class TexRenderer():
 
 		xloc = int((mx/self.w)*self.sim_w)
 		yloc = int((my/self.h)*self.sim_h)
+		scaled_dx = self.sim_w*(dx/self.w)
+		scaled_dy = self.sim_h*(dy/self.h)
 
-		self.sim.F_mouse[max(xloc-3,0):min(xloc+3, self.sim_w-1), \
-			max(yloc-3,0):min(yloc+1, self.sim_h-3)] += self.sim.force_scale * np.array([dx, dy])
+		self.sim.update_mouse_force(xloc, yloc, dx, dy)
 
 		if (self.mode == "GEN_DATA"):
 			xloc = int((mx/self.w)*self.lr_w)
 			yloc = int((my/self.h)*self.lr_h)
-			self.low_res_sim.F_mouse[max(xloc-3,0):min(xloc+3, self.lr_w-1), \
-				max(yloc-3,0):min(yloc+3, self.lr_h-1)] += self.sim.force_scale * np.array([dx, dy])
+			scaled_dx = self.lr_w*(dx/self.w)
+			scaled_dy = self.lr_h*(dy/self.h)
+			self.low_res_sim.update_mouse_force(xloc, yloc, dx, dy)
 
 		self.mouse_x = mx
 		self.mouse_y = my
@@ -212,17 +215,15 @@ class TexRenderer():
 	def run(self):
 		glutMainLoop()
 
-
 def main():
 	if (len(sys.argv) < 2):
 		print("USAGE: python app.py <run mode, one of [RUN, VIEW, GEN_DATA]> <path (if using VIEW or GEN_DATA)>")
 		exit()
-	# First arg can either be "GEN_DATA", "RUN", or "VIEW".
 	mode = sys.argv[1]
 	path = ""
 	if (mode == "GEN_DATA" or mode=="VIEW"):
 		path = sys.argv[2]
-	tex_renderer = TexRenderer(600, 600, mode=mode, path=path)
+	tex_renderer = TexRenderer(600, 600, 150, 150, mode=mode, path=path)
 	tex_renderer.run()
 
 main()
