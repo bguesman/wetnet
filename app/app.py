@@ -11,55 +11,54 @@ from render.renderer import Renderer
 
 class TexRenderer():
 
-	def __init__(self, w, h, generate_data=False, view_data=False, path=""):
+	def __init__(self, w, h, mode="RUN", path=""):
 
-		self.generate_data = generate_data
-		self.view_data = view_data
+		# Set member variables from initialization parameters.
+
+		# Operating mode, one of:
+		#	"RUN": runs simulation for demo purposes.
+		#	"GEN_DATA": runs simulation at low and high res
+		#	and writes density and velocity grids to files
+		#	at specified file path.
+		#	"VIEW": views pre-computed simulation at specified
+		#	file path.
+		if (mode != "RUN" and mode != "VIEW" and \
+			mode !="GEN_DATA"):
+			print("Mode must be one of [RUN, VIEW, GEN_DATA].")
+			exit()
+		self.mode = mode
 		self.path = path
-
-		# Open GL Initialization.
-		glutInit()
-		# We are rendering to RBGA.
-		glutInitDisplayMode(GLUT_RGBA)
-		# Set up the window. Resize in the draw loop on first time.
-		glutInitWindowSize(w-1, h-1)
-		glutInitWindowPosition(0, 0)
-		wind = glutCreateWindow("Fluid Sim")
-
-		# Set our draw loop to the display function.
-		glutDisplayFunc(self.drawLoop)
-		glutIdleFunc(self.drawLoop)
-		if (not self.view_data):
-			glutMotionFunc(self.mouseControl)
-			glutMouseFunc(self.mouseReleased)
-
 		# Width and height of the window.
 		self.w = w
 		self.h = h
 
-		# Width and height of the sim.
+		# Wrapper for OpenGL initialization calls.
+		self.initOpenGL()
 
 		# Mouse position.
 		self.mouse_x = None
 		self.mouse_y = None
 
+		# Width and height of the sim.
 		self.sim_w = 100
 		self.sim_h = 100
-		if (self.view_data):
+
+		if (self.mode == "VIEW"):
 			# We need no renderer for this sim! But we do
-			# need a frame number
+			# need a frame number to know what frame of the
+			# precomputed sim to render.
 			self.frame = 0
-		elif (self.generate_data):
-			# Low res sim parameters
-			self.lr_w = self.sim_w/5
-			self.lr_h = self.sim_h/5
+		elif (self.mode == "GEN_DATA"):
 			# We need two sims: a high res "real one"
 			# and a low res "fake" one.
 			self.sim = Smoke(self.sim_w, self.sim_h, \
 				save_data=True, path=self.path+"/hi_res/")
+			# Low res sim parameters
+			self.lr_w = self.sim_w/5
+			self.lr_h = self.sim_h/5
 			self.low_res_sim = Smoke(int(self.lr_w), int(self.lr_h), \
 				save_data=True, path=self.path+"/lo_res/")
-		else:
+		elif (self.mode == "RUN"):
 			# We just need one multi-res sim!
 			# TODO: change to multi-res when ready.
 			self.sim = Smoke(self.sim_w, self.sim_h)
@@ -67,35 +66,34 @@ class TexRenderer():
 		# Renderer for the sim.
 		self.renderer = Renderer(self.sim_w, self.sim_h)
 
-		# Render the first frame of the sim, set it to our active texture.
-		# Texture will be in row major order.
-		if (self.view_data):
-			density = np.load(self.path + format(self.frame, "0>9") + ".npz")['d']
-			self.tex_array = self.renderer.render(np.transpose(density[1:-1,1:-1]))
-			self.frame += 1
-		elif (self.generate_data):
-			self.tex_array = self.renderer.render(self.sim.step())
-			self.low_res_sim.step()
-		else:
-			self.tex_array = self.renderer.render(self.sim.step())
+		# Creates our main texture to render the fluid to,
+		# with no data bound to it.
+		self.texture = self.createTexture()
 
-		self.texture = self.textureFromNumpy(self.tex_array)
+		# Render the first frame of the sim.
+		self.updateTexture()
 
 		# Hack for window resize bug.
 		self.first_iteration = True
 
-	def textureFromNumpy(self, tex_array):
-		texture = glGenTextures(1)
-		glPixelStorei(GL_UNPACK_ALIGNMENT,1)
-		glBindTexture(GL_TEXTURE_2D, texture)
-		# Texture parameters are part of the texture object, so you need to
-		# specify them only once for a given texture object.
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex_array.shape[0], tex_array.shape[1], 0, GL_RGB, GL_UNSIGNED_BYTE, tex_array)
-		return texture
+	def initOpenGL(self):
+		# Open GL Initialization.
+		glutInit()
+		# We are rendering to RBGA.
+		glutInitDisplayMode(GLUT_RGBA)
+		# Set up the window. Resize in the draw loop on first time.
+		glutInitWindowSize(self.w-1, self.h-1)
+		glutInitWindowPosition(0, 0)
+		wind = glutCreateWindow("Fluid Sim: " + self.mode + " Mode")
+
+		# Set our draw loop to the display function.
+		glutDisplayFunc(self.drawLoop)
+		glutIdleFunc(self.drawLoop)
+
+		# Set up mouse interaction if we are not in view mode.
+		if (self.mode != "VIEW"):
+			glutMotionFunc(self.mouseControl)
+			glutMouseFunc(self.mouseReleased)
 
 	def drawLoop(self):
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -123,8 +121,24 @@ class TexRenderer():
 
 		glutSwapBuffers()
 
+	def createTexture(self):
+		texture = glGenTextures(1)
+		glPixelStorei(GL_UNPACK_ALIGNMENT,1)
+		glBindTexture(GL_TEXTURE_2D, texture)
+		# Texture parameters are part of the texture object, so you need to
+		# specify them only once for a given texture object.
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+		return texture
+
 	def updateTexture(self):
-		if (self.view_data):
+		# Fetch our new texture data.
+		if (self.mode == "VIEW"):
+			# If we are viewing a pre-computed sim, we get
+			# our density data from the file corresponding to the
+			# current frame.
 			try:
 				density = np.load(self.path + format(self.frame, "0>9") + ".npz")['d']
 			except:
@@ -132,11 +146,18 @@ class TexRenderer():
 				density = np.load(self.path + format(self.frame, "0>9") + ".npz")['d']
 			self.tex_array = self.renderer.render(np.transpose(density[1:-1,1:-1]))
 			self.frame += 1
-		elif (self.generate_data):
-			self.tex_array = self.renderer.render(self.sim.step())
-			self.low_res_sim.step()
 		else:
+			# If we are running a sim to generate data or for a demo,
+			# we get our density data from the sim. In the case of
+			# generate data, we use the hi-res sim.
 			self.tex_array = self.renderer.render(self.sim.step())
+
+		# If we are generating data, we also need to step our low-res sim.
+		if (self.mode == "GEN_DATA"):
+			self.low_res_sim.step()
+
+		# Finally, bind the texture array, wherever we got it from, to our
+		# texture.
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, self.tex_array.shape[0],
 			self.tex_array.shape[1], 0, GL_RGB, GL_UNSIGNED_BYTE,
 			self.tex_array)
@@ -153,7 +174,6 @@ class TexRenderer():
 		glTexCoord2f(1, 0)
 		glVertex2f(self.w, 0)
 		glEnd()
-
 
 	# TODO: make this work for both sims, and make the force application area
 	# SCALE INVARIANT!
@@ -172,10 +192,10 @@ class TexRenderer():
 		xloc = int((mx/self.w)*self.sim_w)
 		yloc = int((my/self.h)*self.sim_h)
 
-		self.sim.F_mouse[max(xloc-1,0):min(xloc+1, self.sim_w-1), \
-			max(yloc-1,0):min(yloc+1, self.sim_h-1)] += self.sim.force_scale * np.array([dx, dy])
+		self.sim.F_mouse[max(xloc-3,0):min(xloc+3, self.sim_w-1), \
+			max(yloc-3,0):min(yloc+1, self.sim_h-3)] += self.sim.force_scale * np.array([dx, dy])
 
-		if (self.generate_data):
+		if (self.mode == "GEN_DATA"):
 			xloc = int((mx/self.w)*self.lr_w)
 			yloc = int((my/self.h)*self.lr_h)
 			self.low_res_sim.F_mouse[max(xloc-3,0):min(xloc+3, self.lr_w-1), \
@@ -194,14 +214,15 @@ class TexRenderer():
 
 
 def main():
-	# First arg can either be "GEN_DATA", "RUN", or "VIEW_DATA".
-	run_type = sys.argv[1]
+	if (len(sys.argv) < 2):
+		print("USAGE: python app.py <run mode, one of [RUN, VIEW, GEN_DATA]> <path (if using VIEW or GEN_DATA)>")
+		exit()
+	# First arg can either be "GEN_DATA", "RUN", or "VIEW".
+	mode = sys.argv[1]
 	path = ""
-	if (run_type == "GEN_DATA" or run_type=="VIEW_DATA"):
+	if (mode == "GEN_DATA" or mode=="VIEW"):
 		path = sys.argv[2]
-	tex_renderer = TexRenderer(600, 600, \
-		generate_data=(run_type == "GEN_DATA"), \
-		view_data=(run_type == "VIEW_DATA"), path=path)
+	tex_renderer = TexRenderer(600, 600, mode=mode, path=path)
 	tex_renderer.run()
 
 main()
