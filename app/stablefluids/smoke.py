@@ -2,10 +2,11 @@ import numpy as np
 import scipy.interpolate
 from scipy import ndimage
 import datetime
+import cv2
 
 class Smoke():
 
-    def __init__(self, w, h, dt=1):
+    def __init__(self, w, h, dt=1, save_data=False, path=""):
         # Grid width and height. Pad with dummy cells for boundary conditions.
         self.w = w+2
         self.h = h+2
@@ -16,9 +17,6 @@ class Smoke():
 
         # Density sources.
         self.sources = np.zeros((self.w, self.h))
-        # self.sources[0:int(self.w),0:int(self.h/2)] = 0.3 * np.random.rand(int(self.w), int(self.h/2))
-        # self.sources[int(self.w/2)-15:int(self.w/2)+15,int(self.h/2)-15:int(self.h/2)+15] = 1 * np.random.rand(30, 30)
-        self.sources[int(self.w/2)-5:int(self.w/2)+5,-10:] = 0.02/30 * np.random.rand(10, 10)
 
         # Velocity grid. Stored in column-major order.
         self.v = np.zeros((self.w, self.h, 2))
@@ -26,8 +24,14 @@ class Smoke():
         # Force grid. Stored in column-major order.
         self.F = np.zeros((self.w, self.h, 2))
 
-        self.F[int(self.w/2)-5:int(self.w/2)+5,-10:,1] = -0.05/3
-        # self.F[:,:,1] = -0.05
+        # Force applied by mouse.
+        self.F_mouse = np.zeros((self.w, self.h, 2))
+
+        # Scales forces by appropriate amount given cell size.
+        # We assume "physical" width of the sim = 1.
+        # We use a constant factor of 1e-3 to allow the force values
+        # we set for gravity to seem reasonable.
+        self.force_scale = 1e-3 / (1.0/self.w)
 
         # Time counter.
         self.t = 0
@@ -35,79 +39,98 @@ class Smoke():
         self.dt = dt
 
         # Viscosity.
-        self.viscosity = 0.1
+        self.viscosity = 0.001
 
         # Vorticity confinement weight.
-        self.epsilon = 0.1
+        self.epsilon = 0.05
 
         # Number of iterations to use when performing diffusion and
         # projection steps.
         self.num_steps = 20
 
+        # Frame counter.
+        self.frame = 0
+
+        # Metadata.
+        self.save_data = save_data
+        self.path = path
+
+        # Initializations.
+        # Random chunk of sources at the top.
+        self.flow_rate = 0.1
+        self.sources[int(self.w/2)-int(self.w/6):int(self.w/2)+int(self.w/6), \
+            -int(self.h/4):] = self.flow_rate * np.random.rand(2*int(self.w/6), \
+            int(self.h/4))
+
+        # Gravity.
+        self.F[int(self.w/2)-int(self.w/6):int(self.w/2)+int(self.w/6), \
+            -int(self.h/4):,1] = -0.3
+
     def step(self):
 
-        self.sources[int(self.w/2)-5:int(self.w/2)+5,-10:] = 0.03 * np.random.rand(10, 10)
+        # Re-randomize sources.
+        self.sources[int(self.w/2)-int(self.w/6):int(self.w/2)+int(self.w/6), \
+            -int(self.h/4):] = self.flow_rate * np.random.rand(2*int(self.w/6), \
+            int(self.h/4))
 
         # Run through all our velocity updates.
+        self.F_mouse *= 0.9
         start = datetime.datetime.now()
-        self.v = self.add_force(self.v, self.F)
+        self.add_force(self.v, self.F, self.force_scale)
+        self.add_force(self.v, self.F_mouse, self.force_scale)
         end = datetime.datetime.now()
-        print("addforce time:", end.microsecond - start.microsecond)
-        self.v = self.impose_boundary(self.v, 2, 'collision')
+        # print("addforce time:", end.microsecond - start.microsecond)
+        self.impose_boundary(self.v, 2, 'collision')
 
         # Add vorticity confinement force.
         start = datetime.datetime.now()
-        self.v = self.vorticity_confinement(self.v)
+        self.vorticity_confinement(self.v)
         end = datetime.datetime.now()
-        print("vorticity confinement time:", end.microsecond - start.microsecond)
-        self.v = self.impose_boundary(self.v, 2, 'collision')
+        # print("vorticity confinement time:", end.microsecond - start.microsecond)
+        self.impose_boundary(self.v, 2, 'collision')
 
         start = datetime.datetime.now()
         self.v = self.advect(self.v, 2, 0.0, 'linear')
         end = datetime.datetime.now()
-        print("advect time:", end.microsecond - start.microsecond)
-        self.v = self.impose_boundary(self.v, 2, 'collision')
+        # print("advect time:", end.microsecond - start.microsecond)
+        self.impose_boundary(self.v, 2, 'collision')
+
+        self.impose_boundary(self.v, 2, 'collision')
 
         start = datetime.datetime.now()
-        self.v = self.diffuse(self.v, self.viscosity, 2, 'collision')
+        self.diffuse(self.v, self.viscosity, 2, 'collision')
         end = datetime.datetime.now()
-        print("diffuse time:", end.microsecond - start.microsecond)
-        self.v = self.impose_boundary(self.v, 2, 'collision')
+        # print("diffuse time:", end.microsecond - start.microsecond)
+        self.impose_boundary(self.v, 2, 'collision')
 
         start = datetime.datetime.now()
-        self.v = self.project(self.v)
+        self.project(self.v)
         end = datetime.datetime.now()
-        print("project time:", end.microsecond - start.microsecond)
-        self.v = self.impose_boundary(self.v, 2, 'collision')
+        # print("project time:", end.microsecond - start.microsecond)
+        self.impose_boundary(self.v, 2, 'collision')
 
         # Run through all our density updates.
-        self.d = self.add_force(self.d, self.sources)
-        # self.sources = np.zeros((self.w, self.h))
+        self.add_force(self.d, self.sources, np.sqrt(self.force_scale))
 
         self.d = self.advect(self.d, 1, 0.0, 'linear')
-        self.d = self.impose_boundary(self.d, 1, 'zero')
+        self.impose_boundary(self.d, 1, 'zero')
 
-        save_d = []
-        d_transpose =np.transpose(self.d[1:-1,1:-1])
-        for i in range(202):
-            save_d.append(d_transpose)
-        save_d = np.array(save_d)
-        save_v = self.v[..., np.newaxis]
-        np.savez("smoke_style_transfer/data/waterfall/d/001", x=save_d)
-        np.savez("smoke_style_transfer/data/waterfall/v/001", x=save_v)
+        if(self.save_data):
+            np.savez(self.path + format(self.frame, "0>9"), d=self.d, v=self.v)
 
         # Update timestep.
         self.t += self.dt
+        self.frame += 1
         return np.transpose(self.d[1:-1,1:-1])
 
-    def add_force(self, data, force):
+    def add_force(self, data, force, force_scale):
         # Just take one first order step.
-        return data + force * self.dt
+        data += force * force_scale * self.dt
 
     def advect(self, data, dim, fill, interp_method, collision=True):
         # Get a grid of cell indices (cell center point locations).
-        x_range = np.arange(0, self.w)
-        y_range = np.arange(0, self.h)
+        x_range = np.arange(0, data.shape[0])
+        y_range = np.arange(0, data.shape[1])
         xx, yy = np.meshgrid(x_range, y_range)
 
         # Use x, y to fit with velocity grid's order.
@@ -142,27 +165,25 @@ class Smoke():
             v_new[1:-1,1:-1] = (1.0 / (4.0 * a + 1.0)) * \
                 (a*(v_new[2:,1:-1] + v_new[0:-2,1:-1]
                 + v_new[1:-1,2:] + v_new[1:-1,0:-2]) + v[1:-1,1:-1])
-            v_new = self.impose_boundary(v_new, dim, boundary_type)
-        return v_new
+            self.impose_boundary(v_new, dim, boundary_type)
+        np.copyto(v, v_new)
 
     def project(self, v):
-        div = np.zeros((self.w, self.h))
-        p = np.zeros((self.w, self.h))
+        div = np.zeros((v.shape[0], v.shape[1]))
+        p = np.zeros((v.shape[0], v.shape[1]))
         div[1:-1,1:-1] = 0.5 * (v[1:-1,2:,1] - v[1:-1,0:-2,1] \
             + v[2:,1:-1,0] - v[0:-2,1:-1,0])
-        div = self.impose_boundary(div, 1, 'same')
+        self.impose_boundary(div, 1, 'same')
 
         # Projection iteration.
         for i in range(self.num_steps):
             p[1:-1,1:-1] = 0.25 * (p[1:-1,2:] + p[1:-1,0:-2] + p[2:,1:-1] \
                 + p[0:-2, 1:-1] - div[1:-1,1:-1])
-            p = self.impose_boundary(p, 1, 'same')
+            self.impose_boundary(p, 1, 'same')
 
         # Velocity minus grad of pressure.
         v[1:-1,1:-1,1] -= 0.5 * (p[1:-1,2:] - p[1:-1,0:-2])
         v[1:-1,1:-1,0] -= 0.5 * (p[2:,1:-1] - p[0:-2,1:-1])
-
-        return v
 
     def vorticity_confinement(self, v):
         # Code snippet:
@@ -197,10 +218,8 @@ class Smoke():
         self.impose_boundary(centered_curl[1:-1,1:-1], 1, 'same')
         self.impose_boundary(centered_curl, 1, 'same')
 
-        v[:,:,0] += self.dt * dx * centered_curl
-        v[:,:,1] += self.dt * dy * centered_curl
-
-        return v
+        v[:,:,0] += self.dt * dx * centered_curl * self.force_scale
+        v[:,:,1] += self.dt * dy * centered_curl * self.force_scale
 
     def in_bounds(self, point):
         return point[0] >= 0.0 and point[1] >= 0.0 \
@@ -231,4 +250,3 @@ class Smoke():
             # Top and bottom rows.
             data[:,0] = np.stack([-data[:,1,0], -data[:,1,1]], axis=-1)
             data[:,-1] = np.stack([-data[:,-2,0], -data[:,-2,1]], axis=-1)
-        return data
