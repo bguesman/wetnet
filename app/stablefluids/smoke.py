@@ -84,9 +84,10 @@ class Smoke():
         # Max flow rate of density sources.
         self.flow_rate = 0.005
 
-        # Strength of the mouse force, again, multiplied by
-        # the grid's scale.
-        self.mouse_force = 3e-5 * self.w
+        # Strength of the mouse force. Doesn't need to be scaled
+        # by grid size because it is based dx's and dy's computed
+        # in the grid's coordinate system.
+        self.mouse_force = 0.05
 
         # Controls how quickly the force applied by the mouse
         # dissipates.
@@ -97,7 +98,7 @@ class Smoke():
         # Radius of mouse's area of effect. In practice, this
         # is a square grid, but radius is an ok way of thinking
         # about it.
-        self.mouse_aoe_radius = int(0.03 * self.w)
+        self.mouse_aoe_radius = max(1, int(0.03 * self.w))
 
         ################ END PHYSICAL CONSTANTS ################
 

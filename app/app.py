@@ -12,7 +12,7 @@ from render.renderer import Renderer
 class TexRenderer():
 
 	def __init__(self, window_w, window_h, sim_w, sim_h,
-		mode="RUN", path="", lo_res_scale=0.2):
+		mode="RUN", path="", lo_res_scale=0.3):
 
 		# Set member variables from initialization parameters.
 
@@ -55,8 +55,8 @@ class TexRenderer():
 			self.sim = Smoke(self.sim_w, self.sim_h, \
 				save_data=True, path=self.path+"/hi_res/")
 			# Low res sim parameters
-			self.lr_w = self.sim_w * lo_res_scale
-			self.lr_h = self.sim_h * lo_res_scale
+			self.lr_w = int(self.sim_w * lo_res_scale)
+			self.lr_h = int(self.sim_h * lo_res_scale)
 			self.low_res_sim = Smoke(int(self.lr_w), int(self.lr_h), \
 				save_data=True, path=self.path+"/lo_res/")
 		elif (self.mode == "RUN"):
@@ -195,14 +195,15 @@ class TexRenderer():
 		scaled_dx = self.sim_w*(dx/self.w)
 		scaled_dy = self.sim_h*(dy/self.h)
 
-		self.sim.update_mouse_force(xloc, yloc, dx, dy)
+		self.sim.update_mouse_force(xloc, yloc, scaled_dx, scaled_dy)
 
 		if (self.mode == "GEN_DATA"):
 			xloc = int((mx/self.w)*self.lr_w)
 			yloc = int((my/self.h)*self.lr_h)
 			scaled_dx = self.lr_w*(dx/self.w)
 			scaled_dy = self.lr_h*(dy/self.h)
-			self.low_res_sim.update_mouse_force(xloc, yloc, dx, dy)
+			self.low_res_sim.update_mouse_force(xloc, yloc, \
+				scaled_dx, scaled_dy)
 
 		self.mouse_x = mx
 		self.mouse_y = my
