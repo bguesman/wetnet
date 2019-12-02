@@ -161,7 +161,7 @@ class Smoke():
         self.d = self.advect(self.d, 1, 0.0, 'linear')
         self.impose_boundary(self.d, 1, 'zero')
 
-        if(self.save_data):
+        if (self.save_data):
             np.savez(self.path + format(self.frame, "0>9"), d=self.d, v=self.v)
 
         # Update timestep.
