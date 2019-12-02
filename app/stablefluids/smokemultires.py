@@ -3,56 +3,120 @@ import scipy.interpolate
 from scipy import ndimage
 import datetime
 import cv2
+from fluidgan.fluid_autoencoder import FluidAutoencoder
 
 class SmokeMultiRes():
 
-    def __init__(self, w, h, dt=1):
-        # Grid width and height. Pad with dummy cells for boundary conditions.
-        self.w = w+2
-        self.h = h+2
+    def __init__(self, w, h, dt=2):
+        ####################### METADATA #######################
 
-        # Density grid. Stored in column-major order.
-        # 1st dimension = x coordinate, second dimension = y coordinate.
-        self.d = np.zeros((self.w, self.h))
-
-        # Density sources.
-        self.sources = np.zeros((self.w, self.h))
-        # self.sources[0:int(self.w),0:int(self.h/2)] = 0.3 * np.random.rand(int(self.w), int(self.h/2))
-        # self.sources[int(self.w/2)-15:int(self.w/2)+15,int(self.h/2)-15:int(self.h/2)+15] = 1 * np.random.rand(30, 30)
-        self.sources[int(self.w/2)-45:int(self.w/2)+45,-90:] = 0.02 * np.random.rand(90, 90)
-
-        # Velocity grid. Stored in column-major order.
-        self.v = np.zeros((self.w, self.h, 2))
-
-        # Force grid. Stored in column-major order.
-        self.F = np.zeros((self.w, self.h, 2))
-
-        self.F[int(self.w/2)-45:int(self.w/2)+45,-90:,1] = -0.05 * 3
-
-        # Force applied by mouse.
-        self.F_mouse = np.zeros((self.w, self.h, 2))
-        # self.F[:,:,1] = -0.05
-
-        # Time counter.
-        self.t = 0
-        # Time step.
-        self.dt = dt
-
-        # Viscosity.
-        self.viscosity = 0.001
-
-        # Vorticity confinement weight.
-        self.epsilon = 0.05
+        # Frame counter.
+        self.frame = 0
 
         # Number of iterations to use when performing diffusion and
         # projection steps.
         self.num_steps = 20
 
+        ##################### END METADATA #####################
+
+
+        ######################## GRIDS #########################
+
+        # NOTES:
+        #   - All grids are in column major order. I.e.,
+        #   1st dimension = x coordinate,
+        #   2nd dimension = y coordinate.
+        #   - All 2 dimensional quantities are stored [x, y].
+
+        # Width and height of grids. Pad with one layer of dummy
+        # cells for imposing boundary conditions.
+        self.w = w+2
+        self.h = h+2
+
+        # Time counter.
+        self.t = 0
+
+        # Fluid density.
+        self.d = np.zeros((self.w, self.h))
+
+        # Density sources.
+        self.sources = np.zeros((self.w, self.h))
+
+        # Fluid velocity.
+        self.v = np.zeros((self.w, self.h, 2))
+
+        # Non-mouse forces. Aka, "velocity sources".
+        self.F = np.zeros((self.w, self.h, 2))
+
+        # Force applied by mouse. Separated out so we can
+        # apply attenuation.
+        self.F_mouse = np.zeros((self.w, self.h, 2))
+
+        ###################### END GRIDS #######################
+
+
+        ################## PHYSICAL CONSTANTS ##################
+
+        # Time step.
+        self.dt = dt
+
+        # Gravitational force. To make this quantity scale
+        # properly with the fluid sim's size, we need to
+        # multiply it by the grid's scale, which we'll take
+        # to be the unit length.
+        self.g = -1e-4 * self.w
+
+        # Viscosity. In theory, should be scaled, but effect is
+        # negligible.
+        self.viscosity = 0.5
+
+        # Vorticity confinement weight. Also has to be scaled by
+        # width---technically a scaling factor on the force, but
+        # rolling it into epsilon is more convenient.
+        self.epsilon = 2e-4 * self.w
+
+        # Max flow rate of density sources.
+        self.flow_rate = 0.005
+
+        # Strength of the mouse force. Doesn't need to be scaled
+        # by grid size because it is based dx's and dy's computed
+        # in the grid's coordinate system.
+        self.mouse_force = 0.05
+
+        # Controls how quickly the force applied by the mouse
+        # dissipates.
+        # 1 -> never.
+        # 0 -> immediately.
+        self.mouse_attenuation_factor = 0.95
+
+        # Radius of mouse's area of effect. In practice, this
+        # is a square grid, but radius is an ok way of thinking
+        # about it.
+        self.mouse_aoe_radius = max(1, int(0.03 * self.w))
+
+        ################ END PHYSICAL CONSTANTS ################
+
+
+        ###################### GRID SETUP ######################
+
+        self.randomize_density_source(self.flow_rate)
+
+        # Gravity, but only by the sources to avoid leakage.
+        self.F[int(self.w/2)-int(self.w/6):int(self.w/2)+int(self.w/6), \
+            -int(self.h/4):,1] = self.g
+
+        #################### END GRID SETUP ####################
+
+        # Autoencoder.
+        self.model = FluidAutoencoder([self.h, self.w, 2])
+        # Call on data before loading weights.
+        self.model(np.array([self.v]))
+        self.model.load_weights("fluidgan/model_weights/model_weights")
+
     def step(self):
 
-        # self.F[:,:,0] = 0.1 * (np.random.rand(self.w, self.h) - 0.5)
-
-        self.sources[int(self.w/2)-45:int(self.w/2)+45,-90:] = 0.005 * np.random.rand(90, 90)
+        # Re-randomize sources.
+        self.randomize_density_source(self.flow_rate)
 
         # Run through all our velocity updates.
         self.F_mouse *= 0.9
@@ -71,7 +135,7 @@ class SmokeMultiRes():
         self.impose_boundary(self.v, 2, 'collision')
 
         # Downsample our velocity.
-        self.v = cv2.resize(self.v, dsize=(int(self.w/5), int(self.h/5)),
+        self.v = cv2.resize(self.v, dsize=(int(self.w/3), int(self.h/3)),
             interpolation=cv2.INTER_LINEAR)
 
         start = datetime.datetime.now()
@@ -99,26 +163,21 @@ class SmokeMultiRes():
         self.impose_boundary(self.v, 2, 'collision')
 
         # NEURAL NET:
+        start = datetime.datetime.now()
+        self.v += ((self.model(np.array([self.v]))).numpy()).reshape(152,152,2)
+        end = datetime.datetime.now()
+        # print("neural net time:", end.microsecond - start.microsecond)
+        self.impose_boundary(self.v, 2, 'collision')
 
         # Run through all our density updates.
         self.add_force(self.d, self.sources)
-        # self.sources = np.zeros((self.w, self.h))
 
         self.d = self.advect(self.d, 1, 0.0, 'linear')
         self.impose_boundary(self.d, 1, 'zero')
 
-        # if(self.t  == 150):
-        #     save_d = []
-        #     d_transpose =np.transpose(self.d[1:-1,1:-1])
-        #     for i in range(202):
-        #         save_d.append(d_transpose)
-        #     save_d = np.array(save_d)
-        #     save_v = self.v[..., np.newaxis]
-        #     np.savez("smoke_style_transfer/data/waterfall/d/001", x=save_d)
-        #     np.savez("smoke_style_transfer/data/waterfall/v/001", x=save_v)
-
         # Update timestep.
         self.t += self.dt
+        self.frame += 1
         return np.transpose(self.d[1:-1,1:-1])
 
     def add_force(self, data, force):
@@ -248,3 +307,16 @@ class SmokeMultiRes():
             # Top and bottom rows.
             data[:,0] = np.stack([-data[:,1,0], -data[:,1,1]], axis=-1)
             data[:,-1] = np.stack([-data[:,-2,0], -data[:,-2,1]], axis=-1)
+
+    def randomize_density_source(self, flow_rate):
+        self.sources[int(self.w/2)-int(self.w/6):int(self.w/2)+int(self.w/6), \
+            -int(self.h/4):] = flow_rate * np.random.rand(2*int(self.w/6), \
+            int(self.h/4))
+
+    def update_mouse_force(self, px, py, dx, dy):
+        x_low = max(px-self.mouse_aoe_radius,0)
+        x_high = min(px+self.mouse_aoe_radius, self.w-1-self.mouse_aoe_radius)
+        y_low = max(py-self.mouse_aoe_radius,0)
+        y_high = min(py+self.mouse_aoe_radius, self.h-1-self.mouse_aoe_radius)
+        self.F_mouse[x_low:x_high, y_low:y_high] += \
+            self.mouse_force * np.array([dx, dy])

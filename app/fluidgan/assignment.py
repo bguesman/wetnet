@@ -46,11 +46,12 @@ def train(model, train_low, train_hi):
 
 		if (i % 5 == 0):
             # Pick 100 random datapoints.
-			random_data = np.random.randint(0, high=train_low.shape[0], size=model.batch_size)
+			random_data = np.random.randint(0, high=train_low.shape[0],
+				size=model.batch_size)
 			test_loss = test(model, tf.gather(train_low, random_data),
 				tf.gather(train_hi, random_data))
-			print("Batch", i, ", loss on random", model.batch_size, "datapoints: ",
-				test_loss)
+			print("Batch", i, ", average loss on random", model.batch_size,
+				"datapoints: ", test_loss)
 
 def test(model, test_low, test_hi):
 	"""
@@ -66,7 +67,7 @@ def test(model, test_low, test_hi):
 		velocity_diffs = model(test_low)
 		loss = model.loss(test_low + velocity_diffs, test_hi)
 		# Accumulate loss.
-		avg_loss += loss
+		avg_loss += loss / model.batch_size
 
 	return avg_loss / num_batches
 
@@ -89,6 +90,8 @@ def main():
 
 	loss = test(model, test_low, test_hi)
 	print("FINAL LOSS ON TEST DATA:", loss)
+
+	model.save_weights('model_weights/model_weights', save_format='tf')
 
 if __name__ == '__main__':
    main()

@@ -12,13 +12,13 @@ def get_data(lo_res_file, hi_res_file):
 	frame = 0
 	low_v = []
 	hi_v = []
-	while frame < 800:
+	while frame < 100:
 		try:
 			new_low_v = np.load(lo_res_file + format(frame, "0>9") + ".npz")['v']
 			new_hi_v = np.load(hi_res_file + format(frame, "0>9") + ".npz")['v']
-			low_v.append(np.array(cv2.resize(new_low_v, dsize=(150, 150),
+			low_v.append(np.array(cv2.resize(new_low_v, dsize=(152, 152),
 	            interpolation=cv2.INTER_LINEAR), dtype=np.float32))
-			hi_v.append(np.array(cv2.resize(new_hi_v, dsize=(150, 150),
+			hi_v.append(np.array(cv2.resize(new_hi_v, dsize=(152, 152),
 	            interpolation=cv2.INTER_LINEAR), dtype=np.float32))
 		except:
 			print("exception!!!")

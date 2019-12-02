@@ -62,7 +62,7 @@ class TexRenderer():
 		elif (self.mode == "RUN"):
 			# We just need one multi-res sim!
 			# TODO: change to multi-res when ready.
-			self.sim = Smoke(self.sim_w, self.sim_h)
+			self.sim = SmokeMultiRes(self.sim_w, self.sim_h)
 
 		# Renderer for the sim.
 		self.renderer = Renderer(self.sim_w, self.sim_h)

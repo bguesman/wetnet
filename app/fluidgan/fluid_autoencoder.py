@@ -18,18 +18,20 @@ class FluidAutoencoder(tf.keras.Model):
 		self.hi_res_dim = hi_res_dim
 
 		# 2) Define convolutional layers.
-		self.conv_1 = tf.keras.layers.Conv2DTranspose(filters=2, kernel_size=3, \
-			strides=1, padding='same')
-		self.conv_2 = tf.keras.layers.Conv2DTranspose(filters=2, kernel_size=3, \
-			strides=1, padding='same')
-		self.conv_3 = tf.keras.layers.Conv2DTranspose(filters=2, kernel_size=3, \
-			strides=1, padding='same')
+		self.conv_1 = tf.keras.layers.Conv2D(filters=4, kernel_size=5, \
+			strides=2, padding='same')
+		self.conv_2 = tf.keras.layers.Conv2D(filters=8, kernel_size=5, \
+			strides=2, padding='same')
+		self.deconv_1 = tf.keras.layers.Conv2DTranspose(filters=4, kernel_size=5, \
+			strides=2, padding='same')
+		self.deconv_2 = tf.keras.layers.Conv2DTranspose(filters=2, kernel_size=5, \
+			strides=2, padding='same')
 
 		# For now, just do nothing.
 
 	@tf.function
 	def call(self, lo_res):
-		return self.conv_3(self.conv_2(self.conv_1(lo_res)))
+		return self.deconv_2(self.deconv_1(self.conv_2(self.conv_1(lo_res))))
 
 	def loss(self, upsampled, true_hi_res):
 		return tf.reduce_sum((upsampled - true_hi_res)**2)
