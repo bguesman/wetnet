@@ -68,7 +68,7 @@ class SmokeMultiRes():
 
         # Viscosity. In theory, should be scaled, but effect is
         # negligible.
-        self.viscosity = 0.5
+        self.viscosity = 0.01
 
         # Vorticity confinement weight. Also has to be scaled by
         # width---technically a scaling factor on the force, but
@@ -135,7 +135,7 @@ class SmokeMultiRes():
         self.impose_boundary(self.v, 2, 'collision')
 
         # Downsample our velocity.
-        self.v = cv2.resize(self.v, dsize=(int(self.w/3), int(self.h/3)),
+        self.v = cv2.resize(self.v, dsize=(int(self.w/2), int(self.h/2)),
             interpolation=cv2.INTER_LINEAR)
 
         start = datetime.datetime.now()
@@ -164,7 +164,8 @@ class SmokeMultiRes():
 
         # NEURAL NET:
         start = datetime.datetime.now()
-        self.v += ((self.model(np.array([self.v]))).numpy()).reshape(152,152,2)
+        changes = ((self.model(np.array([self.v]))).numpy()).reshape(152,152,2) - self.v
+        self.v += changes * 0.01
         end = datetime.datetime.now()
         # print("neural net time:", end.microsecond - start.microsecond)
         self.impose_boundary(self.v, 2, 'collision')

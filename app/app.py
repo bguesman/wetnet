@@ -12,7 +12,7 @@ from render.renderer import Renderer
 class TexRenderer():
 
 	def __init__(self, window_w, window_h, sim_w, sim_h,
-		mode="RUN", path="", lo_res_scale=0.3):
+		mode="RUN", path="", lo_res_scale=0.5):
 
 		# Set member variables from initialization parameters.
 

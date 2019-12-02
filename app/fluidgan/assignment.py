@@ -37,20 +37,20 @@ def train(model, train_low, train_hi):
 		labels = train_hi[model.batch_size * i:model.batch_size * (i+1), \
 			1:]
 		with tf.GradientTape() as tape:
-			velocity_diffs = model(train_low)
-			loss = model.loss(train_low, train_hi, velocity_diffs)
+			upsampled = model(train_low)
+			loss = model.loss(upsampled, train_hi)
 
 		# Optimize.
 		gradients = tape.gradient(loss, model.trainable_variables)
 		model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
-		if (i % 5 == 0):
+		if (i % 1 == 0):
             # Pick 100 random datapoints.
 			random_data = np.random.randint(0, high=train_low.shape[0],
-				size=model.batch_size)
+				size=model.batch_size*10)
 			test_loss = test(model, tf.gather(train_low, random_data),
 				tf.gather(train_hi, random_data))
-			print("Batch", i, ", average loss on random", model.batch_size,
+			print("Batch", i, ", average loss on random", model.batch_size*10,
 				"datapoints: ", test_loss)
 
 def test(model, test_low, test_hi):
@@ -64,8 +64,10 @@ def test(model, test_low, test_hi):
 		batch_inputs = test_low[model.batch_size * i:model.batch_size * (i+1), :]
 		batch_labels = test_hi[model.batch_size * i:model.batch_size * (i+1), :]
 		# Compute loss.
-		velocity_diffs = model(test_low)
-		loss = model.loss(test_low, test_hi, velocity_diffs)
+		upsampled = model(test_low)
+		print("Low max:", np.max(test_low))
+		print("Upsampled max:", np.max(upsampled))
+		loss = model.loss(upsampled, test_hi)
 		# Accumulate loss.
 		avg_loss += loss / model.batch_size
 

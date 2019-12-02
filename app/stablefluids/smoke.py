@@ -74,7 +74,7 @@ class Smoke():
 
         # Viscosity. In theory, should be scaled, but effect is
         # negligible.
-        self.viscosity = 0.5
+        self.viscosity = 0.01
 
         # Vorticity confinement weight. Also has to be scaled by
         # width---technically a scaling factor on the force, but

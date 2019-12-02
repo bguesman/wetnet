@@ -12,7 +12,7 @@ def get_data(lo_res_file, hi_res_file):
 	frame = 0
 	low_v = []
 	hi_v = []
-	while frame < 1000:
+	while frame < 2000:
 		try:
 			new_low_v = np.load(lo_res_file + format(frame, "0>9") + ".npz")['v']
 			new_hi_v = np.load(hi_res_file + format(frame, "0>9") + ".npz")['v']
