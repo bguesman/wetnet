@@ -38,7 +38,7 @@ def train(model, train_low, train_hi):
 			1:]
 		with tf.GradientTape() as tape:
 			velocity_diffs = model(train_low)
-			loss = model.loss(train_low + velocity_diffs, train_hi)
+			loss = model.loss(train_low, train_hi, velocity_diffs)
 
 		# Optimize.
 		gradients = tape.gradient(loss, model.trainable_variables)
@@ -65,7 +65,7 @@ def test(model, test_low, test_hi):
 		batch_labels = test_hi[model.batch_size * i:model.batch_size * (i+1), :]
 		# Compute loss.
 		velocity_diffs = model(test_low)
-		loss = model.loss(test_low + velocity_diffs, test_hi)
+		loss = model.loss(test_low, test_hi, velocity_diffs)
 		# Accumulate loss.
 		avg_loss += loss / model.batch_size
 
@@ -84,7 +84,9 @@ def main():
 
 	# Train and Test Model.
 	start = time.time()
-	train(model, train_low, train_hi)
+	epochs = 1
+	for i in range(epochs):
+		train(model, train_low, train_hi)
 	end = time.time()
 	print("Done training, took", (end - start) / 60, "minutes.")
 
