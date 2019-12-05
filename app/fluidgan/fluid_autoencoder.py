@@ -55,8 +55,10 @@ class FluidAutoencoder(tf.keras.Model):
 		frames = tf.reshape(convs, (lo_res.shape[0], -1, 8))
 		# width * height, frames, channels
 		frames = tf.transpose(frames, (1, 0, 2))
+		frames = tf.reshape(frames, (frames.shape[0] // 4, -1, 8))
 		frames, _ = self.RNN(frames)
 		frames = self.linear(frames)
+
 		frames = tf.transpose(frames, (1, 0, 2))
 		frames = tf.reshape(frames, (lo_res.shape[0], 38, 38, 8))
 
