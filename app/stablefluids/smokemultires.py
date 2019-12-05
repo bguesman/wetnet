@@ -139,7 +139,7 @@ class SmokeMultiRes():
             interpolation=cv2.INTER_LINEAR)
 
         start = datetime.datetime.now()
-        self.v = self.advect(self.v, 2, 0.0, 'linear')
+        self.v = self.advect(self.v, self.v, 2, 0.0, 'linear')
         end = datetime.datetime.now()
         # print("advect time:", end.microsecond - start.microsecond)
         self.impose_boundary(self.v, 2, 'collision')
@@ -164,16 +164,16 @@ class SmokeMultiRes():
 
         # NEURAL NET:
         start = datetime.datetime.now()
-        changes = ((self.model(np.array([self.v]))).numpy()).reshape(152,152,2) - self.v
-        self.v += changes * 0.01
+        changes = ((self.model(np.array([self.v]))).numpy()).reshape(152,152,2) 
+        temp_v = self.v + changes 
         end = datetime.datetime.now()
         # print("neural net time:", end.microsecond - start.microsecond)
-        self.impose_boundary(self.v, 2, 'collision')
+        self.impose_boundary(temp_v, 2, 'collision')
 
         # Run through all our density updates.
         self.add_force(self.d, self.sources)
 
-        self.d = self.advect(self.d, 1, 0.0, 'linear')
+        self.d = self.advect(self.d, temp_v, 1, 0.0, 'linear')
         self.impose_boundary(self.d, 1, 'zero')
 
         # Update timestep.
@@ -185,7 +185,7 @@ class SmokeMultiRes():
         # Just take one first order step.
         data += force * self.dt
 
-    def advect(self, data, dim, fill, interp_method, collision=True):
+    def advect(self, data, v, dim, fill, interp_method, collision=True):
         # Get a grid of cell indices (cell center point locations).
         x_range = np.arange(0, data.shape[0])
         y_range = np.arange(0, data.shape[1])
@@ -195,7 +195,7 @@ class SmokeMultiRes():
         grid = np.stack([np.transpose(xx), np.transpose(yy)], axis=-1)
 
         # Trace those points backward in time using the velocity field.
-        backtraced_locations = grid - self.dt * self.v
+        backtraced_locations = grid - self.dt * v 
         if (collision):
             backtraced_locations = np.abs(backtraced_locations)
 

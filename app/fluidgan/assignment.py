@@ -31,14 +31,16 @@ def train(model, train_low, train_hi):
     # For each batch.
 	num_batches = int(train_low.shape[0] / model.batch_size)
 	print("Training on", num_batches, "batches.")
-	for i in range(num_batches):
-        # Calculate the predictions within the scope of the gradient tape.
-		inputs = train_low[model.batch_size * i:model.batch_size * (i+1), :]
-		labels = train_hi[model.batch_size * i:model.batch_size * (i+1), \
-			1:]
+	
+	for i in range(train_low.shape[0]):
+		# Collect batch.
+		if(model.batch_size + i +1> train_low.shape[0]):
+			break
+		inputs = train_low[i:model.batch_size + i, :]
+		labels = train_hi[i+1:model.batch_size + i+1, :]
 		with tf.GradientTape() as tape:
-			upsampled = model(train_low)
-			loss = model.loss(upsampled, train_hi)
+			upsampled = model(inputs)
+			loss = model.loss(upsampled, labels)
 
 		# Optimize.
 		gradients = tape.gradient(loss, model.trainable_variables)
@@ -59,15 +61,17 @@ def test(model, test_low, test_hi):
 	"""
 	avg_loss = 0
 	num_batches = int(test_low.shape[0] / model.batch_size)
-	for i in range(num_batches):
+	for i in range(test_low.shape[0]):
 		# Collect batch.
-		batch_inputs = test_low[model.batch_size * i:model.batch_size * (i+1), :]
-		batch_labels = test_hi[model.batch_size * i:model.batch_size * (i+1), :]
+		if(model.batch_size + i +1> test_low.shape[0]):
+			break
+		batch_inputs = test_low[i:model.batch_size + i, :]
+		batch_labels = test_hi[i+1:model.batch_size + i+1, :]
 		# Compute loss.
-		upsampled = model(test_low)
-		print("Low max:", np.max(test_low))
-		print("Upsampled max:", np.max(upsampled))
-		loss = model.loss(upsampled, test_hi)
+		upsampled = model(batch_inputs)
+		print("Low max:", np.max(batch_inputs))
+		print("Upsampled max:", np.max(batch_labels))
+		loss = model.loss(upsampled, batch_labels)
 		# Accumulate loss.
 		avg_loss += loss / model.batch_size
 
@@ -79,10 +83,10 @@ def main():
 	train_low, train_hi, test_low, test_hi = get_data('../data/lo_res/', '../data/hi_res/')
 	print("Preprocessing complete.")
 
-	print("Lo-res dimension:", test_low.shape[1:])
-	print("Hi-res dimension:", test_hi.shape[1:])
+	print("Lo-res dimension:", test_low.shape[:])
+	print("Hi-res dimension:", test_hi.shape[:])
 
-	model = FluidAutoencoder(test_hi.shape[1:])
+	model = FluidAutoencoder(test_hi.shape[:])
 
 	# Train and Test Model.
 	start = time.time()
