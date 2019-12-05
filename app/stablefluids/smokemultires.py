@@ -166,6 +166,7 @@ class SmokeMultiRes():
         start = datetime.datetime.now()
         changes = ((self.model(np.array([self.v]))).numpy()).reshape(152,152,2) 
         temp_v = self.v + changes 
+        #self.v = temp_v
         end = datetime.datetime.now()
         # print("neural net time:", end.microsecond - start.microsecond)
         self.impose_boundary(temp_v, 2, 'collision')
