@@ -110,7 +110,7 @@ class SmokeMultiRes():
         # Autoencoder.
         self.model = FluidAutoencoder([self.h, self.w, 2])
         # Call on data before loading weights.
-        self.model(np.array([self.v]))
+        self.model(np.array([self.v], dtype=np.float32))
         self.model.load_weights("fluidgan/model_weights/model_weights")
 
     def step(self):
@@ -164,7 +164,7 @@ class SmokeMultiRes():
 
         # NEURAL NET:
         start = datetime.datetime.now()
-        changes = ((self.model(np.array([self.v]))).numpy()).reshape(152,152,2) 
+        changes = ((self.model(np.array([self.v], dtype=np.float32))).numpy()).reshape(152,152,2) 
         temp_v = self.v + changes 
         #self.v = temp_v
         end = datetime.datetime.now()
