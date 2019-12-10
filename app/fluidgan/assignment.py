@@ -34,44 +34,57 @@ def train(model, train_low, train_hi):
 	
 	for i in range(train_low.shape[0]):
 		# Collect batch.
-		if(model.batch_size + i +1> train_low.shape[0]):
+		if(model.batch_size + i + 1 > train_low.shape[0]):
 			break
-		inputs = train_low[i:model.batch_size + i, :]
-		labels = train_hi[i+1:model.batch_size + i+1, :]
+		inputs = train_low[i+1:model.batch_size + i + 1, :]
+		labels_tn1 = train_hi[i:model.batch_size + i, :]
+		labels_t0 = train_hi[i+1:model.batch_size + i+1, :]
+		labels_t1 = train_hi[i+2:model.batch_size + i + 2, :]
 		with tf.GradientTape() as tape:
+			# print("model")
 			upsampled = model(inputs)
-			loss = model.loss(upsampled, labels)
+			# print("loss")
+			loss = model.loss(upsampled, labels_tn1, labels_t0, labels_t1)
 
 		# Optimize.
 		gradients = tape.gradient(loss, model.trainable_variables)
 		model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
+		if (i % 100 == 0):
+			model.save_weights('model_weights/model_weights', save_format='tf')
+
 		if (i % 1 == 0):
-            # Pick 100 random datapoints.
-			random_data = np.random.randint(0, high=train_low.shape[0],
-				size=model.batch_size*10)
+            # Pick random contiguous datapoints.
+			datapoints = model.batch_size*10
+			random_index = np.random.randint(1, high=train_low.shape[0]-1-datapoints, size=1)
+			random_data = np.arange(random_index, random_index + model.batch_size*40)
 			test_loss = test(model, tf.gather(train_low, random_data),
-				tf.gather(train_hi, random_data))
+				tf.gather(train_hi, random_data-1), 
+				tf.gather(train_hi, random_data), 
+				tf.gather(train_hi, random_data+1))
 			print("Batch", i, ", average loss on random", model.batch_size*10,
 				"datapoints: ", test_loss)
+			print("Index of loss:", random_index)
 
-def test(model, test_low, test_hi):
+def test(model, test_low, test_hi_tn1, test_hi_t0, test_hi_t1):
 	"""
 	Runs through one epoch - all testing examples.
 	"""
 	avg_loss = 0
 	num_batches = int(test_low.shape[0] / model.batch_size)
-	for i in range(test_low.shape[0]):
+	for i in range(num_batches):
 		# Collect batch.
-		if(model.batch_size + i +1> test_low.shape[0]):
+		if (model.batch_size + i +1> test_low.shape[0]):
 			break
 		batch_inputs = test_low[i:model.batch_size + i, :]
-		batch_labels = test_hi[i+1:model.batch_size + i+1, :]
+		batch_labels_tn1 = test_hi_tn1[i+1:model.batch_size + i+1, :]
+		batch_labels_t0 = test_hi_t0[i+1:model.batch_size + i+1, :]
+		batch_labels_t1 = test_hi_t1[i+1:model.batch_size + i+1, :]
 		# Compute loss.
 		upsampled = model(batch_inputs)
-		print("Low max:", np.max(batch_inputs))
-		print("Upsampled max:", np.max(batch_labels))
-		loss = model.loss(upsampled, batch_labels)
+		# print("Low max:", np.max(batch_inputs))
+		# print("Upsampled max:", np.max(batch_labels_t0))
+		loss = model.loss(upsampled, batch_labels_tn1, batch_labels_t0, batch_labels_t1)
 		# Accumulate loss.
 		avg_loss += loss / model.batch_size
 
@@ -90,7 +103,7 @@ def main():
 
 	# Train and Test Model.
 	start = time.time()
-	epochs = 1
+	epochs = 5
 	for i in range(epochs):
 		train(model, train_low, train_hi)
 	end = time.time()

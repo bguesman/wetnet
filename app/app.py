@@ -224,7 +224,7 @@ def main():
 	path = ""
 	if (mode == "GEN_DATA" or mode=="VIEW"):
 		path = sys.argv[2]
-	tex_renderer = TexRenderer(600, 600, 150, 150, mode=mode, path=path)
+	tex_renderer = TexRenderer(600, 600, 158, 158, mode=mode, path=path)
 	tex_renderer.run()
 
 main()
