@@ -18,7 +18,7 @@ def train(model, train_low, train_hi, train_d):
 	num_batches = int(train_low.shape[0] / model.batch_size)
 	print("Training on", num_batches, "batches.")
 	
-	for i in range(train_low.shape[0]):
+	for i in range(train_low.shape[0]-1):
 		# Collect batch.
 		if(model.batch_size + i + 1 > train_low.shape[0]):
 			break
@@ -86,8 +86,8 @@ def main():
 	# Train and Test Model.
 	start = time.time()
 	epochs = 5
-	frame_block_size = 400
-	frame_blocks = 4
+	frame_block_size = 160
+	frame_blocks = 12000 // frame_block_size
 	for i in range(epochs):
 		for j in range(frame_blocks):
 			print("Loading frame block", j, "...")
