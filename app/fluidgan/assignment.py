@@ -9,24 +9,10 @@ import sys
 import time
 
 
-def train(model, train_low, train_hi):
+def train(model, train_low, train_hi, train_d):
 	"""
 	Runs through one epoch - all training examples.
-
-	:param model: the initilized model to use for forward and backward pass
-	:param train_french: french train data (all data for training) of shape (num_sentences, 14)
-	:param train_english: english train data (all data for training) of shape (num_sentences, 15)
-	:param eng_padding_index: the padding index, the id of *PAD* token. This integer is used to mask padding labels.
-	:return: None
 	"""
-
-	# NOTE: For each training step, you should pass in the french sentences to be used by the encoder,
-	# and english sentences to be used by the decoder
-	# - The english sentences passed to the decoder have the last token in the window removed:
-	#	 [STOP CS147 is the best class. STOP *PAD*] --> [STOP CS147 is the best class. STOP]
-	#
-	# - When computing loss, the decoder labels should have the first word removed:
-	#	 [STOP CS147 is the best class. STOP] --> [CS147 is the best class. STOP]
 
     # For each batch.
 	num_batches = int(train_low.shape[0] / model.batch_size)
@@ -37,6 +23,7 @@ def train(model, train_low, train_hi):
 		if(model.batch_size + i + 1 > train_low.shape[0]):
 			break
 		inputs = train_low[i+1:model.batch_size + i + 1, :]
+		density_tn1 = train_d[i:model.batch_size + i, :]
 		labels_tn1 = train_hi[i:model.batch_size + i, :]
 		labels_t0 = train_hi[i+1:model.batch_size + i+1, :]
 		labels_t1 = train_hi[i+2:model.batch_size + i + 2, :]
@@ -44,7 +31,7 @@ def train(model, train_low, train_hi):
 			# print("model")
 			upsampled = model(inputs)
 			# print("loss")
-			loss = model.loss(upsampled, labels_tn1, labels_t0, labels_t1)
+			loss = model.loss(upsampled, labels_tn1, labels_t0, labels_t1, density_tn1)
 
 		# Optimize.
 		gradients = tape.gradient(loss, model.trainable_variables)
@@ -61,12 +48,13 @@ def train(model, train_low, train_hi):
 			test_loss = test(model, tf.gather(train_low, random_data),
 				tf.gather(train_hi, random_data-1), 
 				tf.gather(train_hi, random_data), 
-				tf.gather(train_hi, random_data+1))
+				tf.gather(train_hi, random_data+1),
+				tf.gather(train_d, random_data-1))
 			print("Batch", i, ", average loss on random", model.batch_size*10,
 				"datapoints: ", test_loss)
 			print("Index of loss:", random_index)
 
-def test(model, test_low, test_hi_tn1, test_hi_t0, test_hi_t1):
+def test(model, test_low, test_hi_tn1, test_hi_t0, test_hi_t1, test_d):
 	"""
 	Runs through one epoch - all testing examples.
 	"""
@@ -77,14 +65,15 @@ def test(model, test_low, test_hi_tn1, test_hi_t0, test_hi_t1):
 		if (model.batch_size + i +1> test_low.shape[0]):
 			break
 		batch_inputs = test_low[i:model.batch_size + i, :]
-		batch_labels_tn1 = test_hi_tn1[i+1:model.batch_size + i+1, :]
-		batch_labels_t0 = test_hi_t0[i+1:model.batch_size + i+1, :]
-		batch_labels_t1 = test_hi_t1[i+1:model.batch_size + i+1, :]
+		batch_d = test_d[i:model.batch_size + i, :]
+		batch_labels_tn1 = test_hi_tn1[i:model.batch_size + i, :]
+		batch_labels_t0 = test_hi_t0[i:model.batch_size + i, :]
+		batch_labels_t1 = test_hi_t1[i:model.batch_size + i, :]
 		# Compute loss.
 		upsampled = model(batch_inputs)
 		# print("Low max:", np.max(batch_inputs))
 		# print("Upsampled max:", np.max(batch_labels_t0))
-		loss = model.loss(upsampled, batch_labels_tn1, batch_labels_t0, batch_labels_t1)
+		loss = model.loss(upsampled, batch_labels_tn1, batch_labels_t0, batch_labels_t1, batch_d)
 		# Accumulate loss.
 		avg_loss += loss / model.batch_size
 
@@ -92,20 +81,23 @@ def test(model, test_low, test_hi_tn1, test_hi_t0, test_hi_t1):
 
 def main():
 
-	print("Running preprocessing...")
-	train_low, train_hi, test_low, test_hi = get_data('../data/lo_res/', '../data/hi_res/')
-	print("Preprocessing complete.")
-
-	print("Lo-res dimension:", test_low.shape[:])
-	print("Hi-res dimension:", test_hi.shape[:])
-
-	model = FluidAutoencoder(test_hi.shape[:])
+	model = FluidAutoencoder()
 
 	# Train and Test Model.
 	start = time.time()
 	epochs = 5
+	frame_block_size = 400
+	frame_blocks = 4
 	for i in range(epochs):
-		train(model, train_low, train_hi)
+		for j in range(frame_blocks):
+			print("Loading frame block", j, "...")
+			train_low, train_hi, train_d, test_low, test_hi, test_d = \
+				get_data('../data/lo_res/', '../data/hi_res/', j * frame_block_size, \
+				frame_block_size)
+			print("Frame block loaded.")
+			print("Lo-res dimension:", test_low.shape[:])
+			print("Hi-res dimension:", test_hi.shape[:])
+			train(model, train_low, train_hi, train_d)
 	end = time.time()
 	print("Done training, took", (end - start) / 60, "minutes.")
 

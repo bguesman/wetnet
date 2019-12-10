@@ -3,7 +3,7 @@ import tensorflow as tf
 from scipy import ndimage
 
 class FluidAutoencoder(tf.keras.Model):
-	def __init__(self, hi_res_dim):
+	def __init__(self):
 
     ######vvv DO NOT CHANGE vvvv##############
 		super(FluidAutoencoder, self).__init__()
@@ -16,8 +16,6 @@ class FluidAutoencoder(tf.keras.Model):
 		# Define batch size and optimizer/learning rate
 		self.batch_size = 8
 		
-		self.hi_res_dim = hi_res_dim
-
 		self.dt = 2 # HACK! In smokemultires.py
 
 		self.rnn_size = 10 * 10
@@ -158,8 +156,8 @@ class FluidAutoencoder(tf.keras.Model):
 			rnn_results14, rnn_results15])
 
 
-		rnn_results = tf.transpose(rnn_results, (1, 2, 0)) 
-		# rnn_results = tf.transpose(rnn_results, (1, 0)) HACK FOR RUNNING
+		#rnn_results = tf.transpose(rnn_results, (1, 2, 0)) 
+		rnn_results = tf.transpose(rnn_results, (1, 0))# HACK FOR RUNNING
 		rnn_results = tf.reshape(rnn_results, convs.shape)
 		# print("fuck everything")
 
@@ -218,7 +216,7 @@ class FluidAutoencoder(tf.keras.Model):
 
 		return interpolated
 
-	def loss(self, upsampled, hi_res_tn1, hi_res_t0, hi_res_t1):
+	def loss(self, upsampled, hi_res_tn1, hi_res_t0, hi_res_t1, hi_res_d):
 		advected_backward = np.zeros(upsampled.shape, dtype=np.float32)
 		advected_backward[0,:,:,:] = self.advect(upsampled[0,:,:,:], -upsampled[0,:,:,:], 2, 0.0, 'linear')
 		advected_backward[1,:,:,:] = self.advect(upsampled[1,:,:,:], -upsampled[1,:,:,:], 2, 0.0, 'linear')
@@ -246,7 +244,29 @@ class FluidAutoencoder(tf.keras.Model):
 		advected_backward = tf.convert_to_tensor(advected_backward)
 		advected_forward = tf.convert_to_tensor(advected_forward)
 
+		# Advect density according to true high res and upsampled velocity fields.
+		advected_hi_res_density = np.zeros(hi_res_d.shape, dtype=np.float32)
+		advected_hi_res_density[0,:,:,:] = self.advect(hi_res_d[0,:,:], hi_res_t0[0,:,:,:], 1, 0.0, 'linear')
+		advected_hi_res_density[1,:,:,:] = self.advect(hi_res_d[1,:,:], hi_res_t0[1,:,:,:], 1, 0.0, 'linear')
+		advected_hi_res_density[2,:,:,:] = self.advect(hi_res_d[2,:,:], hi_res_t0[2,:,:,:], 1, 0.0, 'linear')
+		advected_hi_res_density[3,:,:,:] = self.advect(hi_res_d[3,:,:], hi_res_t0[3,:,:,:], 1, 0.0, 'linear')
+		advected_hi_res_density[4,:,:,:] = self.advect(hi_res_d[4,:,:], hi_res_t0[4,:,:,:], 1, 0.0, 'linear')
+		advected_hi_res_density[5,:,:,:] = self.advect(hi_res_d[5,:,:], hi_res_t0[5,:,:,:], 1, 0.0, 'linear')
+		advected_hi_res_density[6,:,:,:] = self.advect(hi_res_d[6,:,:], hi_res_t0[6,:,:,:], 1, 0.0, 'linear')
+		advected_hi_res_density[7,:,:,:] = self.advect(hi_res_d[7,:,:], hi_res_t0[7,:,:,:], 1, 0.0, 'linear')
+		
+		advected_upsampled_density = np.zeros(hi_res_d.shape, dtype=np.float32)
+		advected_upsampled_density[0,:,:,:] = self.advect(hi_res_d[0,:,:], upsampled[0,:,:,:], 1, 0.0, 'linear')
+		advected_upsampled_density[1,:,:,:] = self.advect(hi_res_d[1,:,:], upsampled[1,:,:,:], 1, 0.0, 'linear')
+		advected_upsampled_density[2,:,:,:] = self.advect(hi_res_d[2,:,:], upsampled[2,:,:,:], 1, 0.0, 'linear')
+		advected_upsampled_density[3,:,:,:] = self.advect(hi_res_d[3,:,:], upsampled[3,:,:,:], 1, 0.0, 'linear')
+		advected_upsampled_density[4,:,:,:] = self.advect(hi_res_d[4,:,:], upsampled[4,:,:,:], 1, 0.0, 'linear')
+		advected_upsampled_density[5,:,:,:] = self.advect(hi_res_d[5,:,:], upsampled[5,:,:,:], 1, 0.0, 'linear')
+		advected_upsampled_density[6,:,:,:] = self.advect(hi_res_d[6,:,:], upsampled[6,:,:,:], 1, 0.0, 'linear')
+		advected_upsampled_density[7,:,:,:] = self.advect(hi_res_d[7,:,:], upsampled[7,:,:,:], 1, 0.0, 'linear')
+		
+		density_loss = tf.reduce_sum((advected_upsampled_density - advected_hi_res_density)**2)
 		forward_temporal_loss = tf.reduce_sum((advected_forward - hi_res_t1) ** 2)
 		backward_temporal_loss = tf.reduce_sum((advected_backward - hi_res_tn1) ** 2)
 		spatial_loss = tf.reduce_sum((upsampled - hi_res_t0)**2)
-		return forward_temporal_loss + backward_temporal_loss + spatial_loss
+		return forward_temporal_loss + backward_temporal_loss + spatial_loss + density_loss
