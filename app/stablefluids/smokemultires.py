@@ -108,7 +108,7 @@ class SmokeMultiRes():
         #################### END GRID SETUP ####################
 
         # Autoencoder.
-        self.model = FluidAutoencoder([self.h, self.w, 2])
+        self.model = FluidAutoencoder()
         # Call on data before loading weights.
         self.model(np.array([self.v]))
         self.model.load_weights("fluidgan/model_weights/model_weights")
@@ -149,13 +149,13 @@ class SmokeMultiRes():
         start = datetime.datetime.now()
         self.diffuse(self.v, self.viscosity, 2, 'collision')
         end = datetime.datetime.now()
-        # print("diffuse time:", end.microsecond - start.microsecond)
+        print("diffuse time:", end.microsecond - start.microsecond)
         self.impose_boundary(self.v, 2, 'collision')
 
         start = datetime.datetime.now()
         self.project(self.v)
         end = datetime.datetime.now()
-        # print("project time:", end.microsecond - start.microsecond)
+        print("project time:", end.microsecond - start.microsecond)
         self.impose_boundary(self.v, 2, 'collision')
 
         self.v = cv2.resize(self.v, dsize=(self.w, self.h),
@@ -168,7 +168,7 @@ class SmokeMultiRes():
         temp_v = self.v + changes 
         # self.v = temp_v
         end = datetime.datetime.now()
-        # print("neural net time:", end.microsecond - start.microsecond)
+        print("neural net time:", end.microsecond - start.microsecond)
         self.impose_boundary(temp_v, 2, 'collision')
 
         # Run through all our density updates.

@@ -14,11 +14,9 @@ def train(model, train_low, train_hi, train_d):
 	Runs through one epoch - all training examples.
 	"""
 
-    # For each batch.
-	num_batches = int(train_low.shape[0] / model.batch_size)
-	print("Training on", num_batches, "batches.")
+	print("Training", train_low.shape[0]-1, "batches.")
 	
-	for i in range(train_low.shape[0]-1):
+	for i in range(train_low.shape[0]-model.batch_size-1):
 		# Collect batch.
 		if(model.batch_size + i + 1 > train_low.shape[0]):
 			break
@@ -37,7 +35,7 @@ def train(model, train_low, train_hi, train_d):
 		gradients = tape.gradient(loss, model.trainable_variables)
 		model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
-		if (i % 100 == 0):
+		if (i % 40 == 0):
 			model.save_weights('model_weights/model_weights', save_format='tf')
 
 		if (i % 1 == 0):

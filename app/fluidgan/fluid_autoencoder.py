@@ -108,8 +108,11 @@ class FluidAutoencoder(tf.keras.Model):
 			rnn_results8, rnn_results9, rnn_results10, rnn_results11, rnn_results12, rnn_results13,
 			rnn_results14, rnn_results15])
 
-		rnn_results = tf.transpose(rnn_results, (1, 2, 0)) 
-		#rnn_results = tf.transpose(rnn_results, (1, 0)) # HACK FOR RUNNING
+		if (len(rnn_results.shape) == 2):
+			rnn_results = tf.transpose(rnn_results, (1, 0)) # HACK FOR RUNNING
+		else:
+			rnn_results = tf.transpose(rnn_results, (1, 2, 0))
+
 		rnn_results = tf.reshape(rnn_results, conv2.shape)
 
 		# Skip connection.
@@ -202,8 +205,12 @@ class FluidAutoencoder(tf.keras.Model):
 		advected_hi_res_density = tf.convert_to_tensor(advected_hi_res_density)
 		advected_upsampled_density = tf.convert_to_tensor(advected_upsampled_density)
 
-		density_loss = tf.reduce_sum((advected_upsampled_density - advected_hi_res_density)**2)
+		density_loss = 1000 * tf.reduce_sum((advected_upsampled_density - advected_hi_res_density)**2)
 		forward_temporal_loss = tf.reduce_sum((advected_forward - hi_res_t1) ** 2)
 		backward_temporal_loss = tf.reduce_sum((advected_backward - hi_res_tn1) ** 2)
 		spatial_loss = tf.reduce_sum((upsampled - hi_res_t0)**2)
+		# tf.print("density loss:", density_loss)
+		# tf.print("forward temporal loss:", forward_temporal_loss)
+		# tf.print("backward temporal loss:", backward_temporal_loss)
+		# tf.print("spatial loss:", spatial_loss)
 		return forward_temporal_loss + backward_temporal_loss + spatial_loss + density_loss
