@@ -4,6 +4,7 @@ from scipy import ndimage
 import datetime
 import cv2
 from fluidgan.fluid_autoencoder import FluidAutoencoder
+import os
 
 class SmokeMultiRes():
 
@@ -110,9 +111,10 @@ class SmokeMultiRes():
         # Autoencoder.
         self.model = FluidAutoencoder()
         # Call on data before loading weights.
-        self.model(np.array([self.v]))
+        self.model(np.array([self.v], dtype=np.float32))
+        print(os.getcwd())
         self.model.load_weights("fluidgan/model_weights/model_weights")
-
+        
     def step(self):
 
         # Re-randomize sources.
@@ -164,7 +166,7 @@ class SmokeMultiRes():
 
         # NEURAL NET:
         start = datetime.datetime.now()
-        changes = ((self.model(np.array([self.v]))).numpy()).reshape(160,160,2) 
+        changes = ((self.model(np.array([self.v], dtype=np.float32))).numpy()).reshape(160,160,2) 
         temp_v = self.v + changes 
         # self.v = temp_v
         end = datetime.datetime.now()
