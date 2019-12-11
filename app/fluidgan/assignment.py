@@ -16,7 +16,8 @@ def train(model, train_low, train_hi, train_d):
 
 	print("Training", train_low.shape[0]-1, "batches.")
 	
-	for i in range(train_low.shape[0]-model.batch_size-1):
+	for k in range(20):
+		i = np.random.randint(1, high=train_low.shape[0]-1-model.batch_size, size=1)[0]
 		# Collect batch.
 		if(model.batch_size + i + 1 > train_low.shape[0]):
 			break
@@ -27,7 +28,7 @@ def train(model, train_low, train_hi, train_d):
 		labels_t1 = train_hi[i+2:model.batch_size + i + 2, :]
 		with tf.GradientTape() as tape:
 			# print("model")
-			upsampled = model(inputs)
+			upsampled = inputs + model(inputs)
 			# print("loss")
 			loss = model.loss(upsampled, labels_tn1, labels_t0, labels_t1, density_tn1)
 
@@ -35,20 +36,20 @@ def train(model, train_low, train_hi, train_d):
 		gradients = tape.gradient(loss, model.trainable_variables)
 		model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
-		if (i % 40 == 0):
+		if (k == 19):
 			model.save_weights('model_weights/model_weights', save_format='tf')
 
 		if (i % 1 == 0):
             # Pick random contiguous datapoints.
 			datapoints = model.batch_size*10
 			random_index = np.random.randint(1, high=train_low.shape[0]-1-datapoints, size=1)
-			random_data = np.arange(random_index, random_index + model.batch_size*40)
+			random_data = np.arange(random_index, random_index + model.batch_size*10)
 			test_loss = test(model, tf.gather(train_low, random_data),
 				tf.gather(train_hi, random_data-1), 
 				tf.gather(train_hi, random_data), 
 				tf.gather(train_hi, random_data+1),
 				tf.gather(train_d, random_data-1))
-			print("Batch", i, ", average loss on random", model.batch_size*10,
+			print("Batch", k, ", average loss on random", model.batch_size*10,
 				"datapoints: ", test_loss)
 			print("Index of loss:", random_index)
 
@@ -68,7 +69,7 @@ def test(model, test_low, test_hi_tn1, test_hi_t0, test_hi_t1, test_d):
 		batch_labels_t0 = test_hi_t0[i:model.batch_size + i, :]
 		batch_labels_t1 = test_hi_t1[i:model.batch_size + i, :]
 		# Compute loss.
-		upsampled = model(batch_inputs)
+		upsampled = batch_inputs + model(batch_inputs)
 		# print("Low max:", np.max(batch_inputs))
 		# print("Upsampled max:", np.max(batch_labels_t0))
 		loss = model.loss(upsampled, batch_labels_tn1, batch_labels_t0, batch_labels_t1, batch_d)
@@ -83,14 +84,15 @@ def main():
 
 	# Train and Test Model.
 	start = time.time()
-	epochs = 5
-	frame_block_size = 160
-	frame_blocks = 12000 // frame_block_size
+	epochs = 10
+	offset = 600
+	frame_block_size = 400
+	frame_blocks = 1200 // frame_block_size
 	for i in range(epochs):
 		for j in range(frame_blocks):
 			print("Loading frame block", j, "...")
 			train_low, train_hi, train_d, test_low, test_hi, test_d = \
-				get_data('../data/lo_res/', '../data/hi_res/', j * frame_block_size, \
+				get_data('../data/lo_res/', '../data/hi_res/', offset + j * frame_block_size, \
 				frame_block_size)
 			print("Frame block loaded.")
 			print("Lo-res dimension:", test_low.shape[:])

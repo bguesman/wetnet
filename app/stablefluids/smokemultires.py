@@ -118,22 +118,6 @@ class SmokeMultiRes():
         # Re-randomize sources.
         self.randomize_density_source(self.flow_rate)
 
-        # Run through all our velocity updates.
-        self.F_mouse *= 0.9
-        start = datetime.datetime.now()
-        self.add_force(self.v, self.F)
-        self.add_force(self.v, self.F_mouse)
-        end = datetime.datetime.now()
-        # print("addforce time:", end.microsecond - start.microsecond)
-        self.impose_boundary(self.v, 2, 'collision')
-
-        # Add vorticity confinement force.
-        start = datetime.datetime.now()
-        self.vorticity_confinement(self.v)
-        end = datetime.datetime.now()
-        # print("vorticity confinement time:", end.microsecond - start.microsecond)
-        self.impose_boundary(self.v, 2, 'collision')
-
         # Downsample our velocity.
         self.v = cv2.resize(self.v, dsize=(int(self.w/2), int(self.h/2)),
             interpolation=cv2.INTER_LINEAR)
@@ -165,10 +149,33 @@ class SmokeMultiRes():
         # NEURAL NET:
         start = datetime.datetime.now()
         changes = ((self.model(np.array([self.v]))).numpy()).reshape(160,160,2) 
-        temp_v = self.v + changes 
+        temp_v = self.v + changes
         # self.v = temp_v
         end = datetime.datetime.now()
         print("neural net time:", end.microsecond - start.microsecond)
+        # print("neural net max:", np.std(changes))
+        print("v max:", np.std(self.v))
+        self.impose_boundary(temp_v, 2, 'collision')
+
+        # Run through all our velocity updates.
+        self.F_mouse *= 0.9
+        start = datetime.datetime.now()
+        self.add_force(self.v, self.F)
+        self.add_force(self.v, self.F_mouse)
+        # self.add_force(temp_v, self.F)
+        # self.add_force(temp_v, self.F_mouse)
+        end = datetime.datetime.now()
+        # print("addforce time:", end.microsecond - start.microsecond)
+        self.impose_boundary(self.v, 2, 'collision')
+        self.impose_boundary(temp_v, 2, 'collision')
+
+        # Add vorticity confinement force.
+        start = datetime.datetime.now()
+        self.vorticity_confinement(self.v)
+        # self.vorticity_confinement(temp_v)
+        end = datetime.datetime.now()
+        # print("vorticity confinement time:", end.microsecond - start.microsecond)
+        self.impose_boundary(self.v, 2, 'collision')
         self.impose_boundary(temp_v, 2, 'collision')
 
         # Run through all our density updates.

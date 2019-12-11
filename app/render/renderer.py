@@ -18,7 +18,8 @@ class Renderer():
         img = np.clip(input, 0, 1)
         img = np.array(255 * np.repeat(img[:,:,np.newaxis], 3, axis=2),
             dtype=np.float32)
-        img *= self.rand_color
+        # img *= self.rand_color
+        img *= np.array([0, 1, 1])
         img = np.clip(img, 0, 255)
         img = np.array(img, dtype=np.uint8)
         resized = cv2.resize(img, dsize=(self.w, self.h),
