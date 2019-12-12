@@ -18,60 +18,59 @@ class FluidAutoencoder(tf.keras.Model):
         
         self.dt = 2 # HACK! In smokemultires.py
 
+        self.num_inner_features = 32
+
         self.rnn_size = 10 * 10
-        self.RNN0 = tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
+        self.RNNs = [tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
                 recurrent_initializer='glorot_uniform', stateful=False, unroll=True)
-        self.RNN1 = tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
-                recurrent_initializer='glorot_uniform', stateful=False, unroll=True)
-        self.RNN2 = tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
-                recurrent_initializer='glorot_uniform', stateful=False, unroll=True)
-        self.RNN3 = tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
-                recurrent_initializer='glorot_uniform', stateful=False, unroll=True)
-        self.RNN4 = tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
-                recurrent_initializer='glorot_uniform', stateful=False, unroll=True)
-        self.RNN5 = tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
-                recurrent_initializer='glorot_uniform', stateful=False, unroll=True)
-        self.RNN6 = tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
-                recurrent_initializer='glorot_uniform', stateful=False, unroll=True)
-        self.RNN7 = tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
-                recurrent_initializer='glorot_uniform', stateful=False, unroll=True)
-        self.RNN8 = tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
-                recurrent_initializer='glorot_uniform', stateful=False, unroll=True)
-        self.RNN9 = tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
-                recurrent_initializer='glorot_uniform', stateful=False, unroll=True)
-        self.RNN10 = tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
-                recurrent_initializer='glorot_uniform', stateful=False, unroll=True)
-        self.RNN11 = tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
-                recurrent_initializer='glorot_uniform', stateful=False, unroll=True)
-        self.RNN12 = tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
-                recurrent_initializer='glorot_uniform', stateful=False, unroll=True)
-        self.RNN13 = tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
-                recurrent_initializer='glorot_uniform', stateful=False, unroll=True)
-        self.RNN14 = tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
-                recurrent_initializer='glorot_uniform', stateful=False, unroll=True)
-        self.RNN15 = tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
-                recurrent_initializer='glorot_uniform', stateful=False, unroll=True)
-        self.linear = tf.keras.layers.Dense(16)
+                for i in range(self.num_inner_features)]
 
         #2) Define convolutional layers + batch norms.
-        self.conv1 = tf.keras.layers.Conv2D(filters=8, kernel_size=7, \
-            strides=4, padding='same',
+        # RNN: 2, 4, 8, 16 (yes, a duplicate 2). For some reason, deconv1 has 32 channels??
+        # No RNN: 8, 16, 32, 64
+        self.conv1 = tf.keras.layers.Conv2D(filters=4, kernel_size=5, \
+            strides=2, padding='same',
             kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.001),
             activation=tf.keras.layers.LeakyReLU(alpha=0.2))
         self.batch_norm_1 = tf.keras.layers.BatchNormalization(axis=3, scale=True)
-        self.conv2 = tf.keras.layers.Conv2D(filters=16, kernel_size=7, \
-            strides=4, padding='same',
+        self.conv2 = tf.keras.layers.Conv2D(filters=8, kernel_size=5, \
+            strides=2, padding='same',
             kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.001),
             activation=tf.keras.layers.LeakyReLU(alpha=0.2))
         self.batch_norm_2 = tf.keras.layers.BatchNormalization(axis=3, scale=True)
-
-        self.deconv1 = tf.keras.layers.Conv2DTranspose(filters=8, kernel_size=7, \
-            strides=4, padding='same',
+        self.conv3 = tf.keras.layers.Conv2D(filters=16, kernel_size=5, \
+            strides=2, padding='same',
             kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.001),
             activation=tf.keras.layers.LeakyReLU(alpha=0.2))
         self.batch_norm_3 = tf.keras.layers.BatchNormalization(axis=3, scale=True)
-        self.deconv2 = tf.keras.layers.Conv2DTranspose(filters=2, kernel_size=7, \
-            strides=4, padding='same',
+        self.conv4 = tf.keras.layers.Conv2D(filters=self.num_inner_features, kernel_size=5, \
+            strides=2, padding='same',
+            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.001),
+            activation=tf.keras.layers.LeakyReLU(alpha=0.2))
+        self.batch_norm_4 = tf.keras.layers.BatchNormalization(axis=3, scale=True)
+
+        self.deconv1 = tf.keras.layers.Conv2DTranspose(filters=16, kernel_size=5, \
+            strides=2, padding='same',
+            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.001),
+            activation=tf.keras.layers.LeakyReLU(alpha=0.2))
+        self.batch_norm_5 = tf.keras.layers.BatchNormalization(axis=3, scale=True)
+        self.deconv2 = tf.keras.layers.Conv2DTranspose(filters=8, kernel_size=5, \
+            strides=2, padding='same',
+            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.001),
+            activation=tf.keras.layers.LeakyReLU(alpha=0.2))
+        self.batch_norm_6 = tf.keras.layers.BatchNormalization(axis=3, scale=True)
+        self.deconv3 = tf.keras.layers.Conv2DTranspose(filters=4, kernel_size=5, \
+            strides=2, padding='same',
+            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.001),
+            activation=tf.keras.layers.LeakyReLU(alpha=0.2))
+        self.batch_norm_7 = tf.keras.layers.BatchNormalization(axis=3, scale=True)
+        self.deconv4 = tf.keras.layers.Conv2DTranspose(filters=2, kernel_size=5, \
+            strides=2, padding='same',
+            kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.001),
+            activation=tf.keras.layers.LeakyReLU(alpha=0.2))
+
+        self.deconv5 = tf.keras.layers.Conv2DTranspose(filters=2, kernel_size=5, \
+            strides=1, padding='same',
             kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.001),
             activation=tf.keras.layers.LeakyReLU(alpha=0.2))
         
@@ -83,44 +82,34 @@ class FluidAutoencoder(tf.keras.Model):
     def call(self, lo_res, skip_connections=True):
         conv1 = self.batch_norm_1(self.conv1(lo_res))
         conv2 = self.batch_norm_2(self.conv2(conv1))
-        frames = tf.reshape(conv2, (conv2.shape[0], -1, conv2.shape[3]))
+        conv3 = self.batch_norm_3(self.conv3(conv2))
+        conv4 = self.batch_norm_4(self.conv4(conv3))
+        frames = tf.reshape(conv4, (conv2.shape[0], -1, conv4.shape[3]))
         frames = tf.transpose(frames, (2, 0, 1))
 
-        rnn_results0 = tf.squeeze(self.RNN0(tf.expand_dims(frames[0,:,:], axis=0)))
-        rnn_results1 = tf.squeeze(self.RNN1(tf.expand_dims(frames[1,:,:], axis=0)))
-        rnn_results2 = tf.squeeze(self.RNN2(tf.expand_dims(frames[2,:,:], axis=0)))
-        rnn_results3 = tf.squeeze(self.RNN3(tf.expand_dims(frames[3,:,:], axis=0)))
-        rnn_results4 = tf.squeeze(self.RNN4(tf.expand_dims(frames[4,:,:], axis=0)))
-        rnn_results5 = tf.squeeze(self.RNN5(tf.expand_dims(frames[5,:,:], axis=0)))
-        rnn_results6 = tf.squeeze(self.RNN6(tf.expand_dims(frames[6,:,:], axis=0)))
-        rnn_results7 = tf.squeeze(self.RNN7(tf.expand_dims(frames[7,:,:], axis=0)))
-        rnn_results8 = tf.squeeze(self.RNN8(tf.expand_dims(frames[8,:,:], axis=0)))
-        rnn_results9 = tf.squeeze(self.RNN9(tf.expand_dims(frames[9,:,:], axis=0)))
-        rnn_results10 = tf.squeeze(self.RNN10(tf.expand_dims(frames[10,:,:], axis=0)))
-        rnn_results11 = tf.squeeze(self.RNN11(tf.expand_dims(frames[11,:,:], axis=0)))
-        rnn_results12 = tf.squeeze(self.RNN12(tf.expand_dims(frames[12,:,:], axis=0)))
-        rnn_results13 = tf.squeeze(self.RNN13(tf.expand_dims(frames[13,:,:], axis=0)))
-        rnn_results14 = tf.squeeze(self.RNN14(tf.expand_dims(frames[14,:,:], axis=0)))
-        rnn_results15 = tf.squeeze(self.RNN15(tf.expand_dims(frames[15,:,:], axis=0)))
-
-        rnn_results = tf.stack([rnn_results0, rnn_results1,
-            rnn_results2, rnn_results3, rnn_results4, rnn_results5, rnn_results6, rnn_results7,
-            rnn_results8, rnn_results9, rnn_results10, rnn_results11, rnn_results12, rnn_results13,
-            rnn_results14, rnn_results15])
+        rnn_results = tf.stack([tf.squeeze(self.RNNs[i](tf.expand_dims(frames[i,:,:], axis=0))) \
+          for i in range(self.num_inner_features)])
 
         if (len(rnn_results.shape) == 2):
-            rnn_results = tf.transpose(rnn_results, (1, 0)) # HACK FOR RUNNING
+          rnn_results = tf.transpose(rnn_results, (1, 0)) # HACK FOR RUNNING
         else:
-            rnn_results = tf.transpose(rnn_results, (1, 2, 0))
+          rnn_results = tf.transpose(rnn_results, (1, 2, 0))
 
-        rnn_results = tf.reshape(rnn_results, conv2.shape)
+        rnn_results = tf.reshape(rnn_results, conv4.shape)
 
         # Skip connection.
         if (skip_connections):
-            deconv1 = self.batch_norm_1(self.deconv1(rnn_results))
-            return self.global_scale * self.deconv2(tf.keras.layers.concatenate([deconv1, conv1], axis=3))
+            deconv1 = self.batch_norm_5(self.deconv1(rnn_results))
+            deconv2 = self.batch_norm_6(self.deconv2(tf.keras.layers.concatenate([deconv1, conv3], axis=3)))
+            deconv3 = self.batch_norm_7(self.deconv3(tf.keras.layers.concatenate([deconv2, conv2], axis=3)))
+            deconv4 = self.global_scale * self.deconv4(tf.keras.layers.concatenate([deconv3, conv1], axis=3))
+            return self.deconv5(tf.keras.layers.concatenate([deconv4, lo_res], axis=3))
         else:
-            return self.global_scale * self.deconv2(self.batch_norm_1(self.deconv1(rnn_results)))
+            deconv1 = self.batch_norm_5(self.deconv1(rnn_results))
+            deconv2 = self.batch_norm_6(self.deconv2(deconv1))
+            deconv3 = self.batch_norm_7(self.deconv3(deconv2))
+            deconv4 = self.global_scale * self.deconv4(deconv3)
+            return self.deconv5(deconv4)
 
     def advect(self, data, v, dim, fill, interp_method, collision=True):
         # Get a grid of cell indices (cell center point locations).
@@ -221,5 +210,5 @@ class FluidAutoencoder(tf.keras.Model):
         # tf.print("backward temporal loss:", backward_temporal_loss)
         # tf.print("spatial loss:", spatial_loss)
         if ret_vals:
-            return forward_temporal_loss + backward_temporal_loss + spatial_loss + density_loss, advected_forward, advected_backward
-        return forward_temporal_loss + backward_temporal_loss + spatial_loss + density_loss
+            return 0.25 * forward_temporal_loss + 0.25 * backward_temporal_loss + spatial_loss + density_loss, advected_forward, advected_backward
+        return 0.25 * forward_temporal_loss + 0.25 * backward_temporal_loss + spatial_loss + density_loss

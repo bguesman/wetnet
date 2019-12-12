@@ -69,6 +69,7 @@ def test(model, discrim, test_low, test_hi_tn1, test_hi_t0, test_hi_t1, test_d):
     Runs through one epoch - all testing examples.
     """
     avg_loss = 0
+    avg_l2_loss = 0
     num_batches = int(test_low.shape[0] / model.batch_size)
     for i in range(num_batches):
         # Collect batch.
@@ -87,11 +88,14 @@ def test(model, discrim, test_low, test_hi_tn1, test_hi_t0, test_hi_t1, test_d):
         dfake_n1 = discrim(advect_back)
         dfake_0 = discrim(upsampled)
         dfake_1 = discrim(advect_for)
+        avg_l2_loss += loss / model.batch_size
         loss = loss + tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(dfake_0), logits=dfake_0))/2.0 \
                     + tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(dfake_1), logits=dfake_1))/2.0 \
                     + tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(dfake_n1), logits=dfake_n1))/2.0 
         # Accumulate loss.
         avg_loss += loss / model.batch_size
+
+    print("L2 loss: ", avg_l2_loss / num_batches)
 
     return avg_loss / num_batches
 
