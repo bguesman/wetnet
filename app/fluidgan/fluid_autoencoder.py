@@ -18,7 +18,7 @@ class FluidAutoencoder(tf.keras.Model):
         
         self.dt = 2 # HACK! In smokemultires.py
 
-        self.num_inner_features = 32
+        self.num_inner_features = 16
 
         self.rnn_size = 10 * 10
         self.RNNs = [tf.keras.layers.GRU(self.rnn_size, return_sequences=True,return_state=False, 
@@ -28,17 +28,17 @@ class FluidAutoencoder(tf.keras.Model):
         #2) Define convolutional layers + batch norms.
         # RNN: 2, 4, 8, 16 (yes, a duplicate 2). For some reason, deconv1 has 32 channels??
         # No RNN: 8, 16, 32, 64
-        self.conv1 = tf.keras.layers.Conv2D(filters=4, kernel_size=5, \
+        self.conv1 = tf.keras.layers.Conv2D(filters=2, kernel_size=5, \
             strides=2, padding='same',
             kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.001),
             activation=tf.keras.layers.LeakyReLU(alpha=0.2))
         self.batch_norm_1 = tf.keras.layers.BatchNormalization(axis=3, scale=True)
-        self.conv2 = tf.keras.layers.Conv2D(filters=8, kernel_size=5, \
+        self.conv2 = tf.keras.layers.Conv2D(filters=4, kernel_size=5, \
             strides=2, padding='same',
             kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.001),
             activation=tf.keras.layers.LeakyReLU(alpha=0.2))
         self.batch_norm_2 = tf.keras.layers.BatchNormalization(axis=3, scale=True)
-        self.conv3 = tf.keras.layers.Conv2D(filters=16, kernel_size=5, \
+        self.conv3 = tf.keras.layers.Conv2D(filters=8, kernel_size=5, \
             strides=2, padding='same',
             kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.001),
             activation=tf.keras.layers.LeakyReLU(alpha=0.2))
@@ -49,7 +49,7 @@ class FluidAutoencoder(tf.keras.Model):
             activation=tf.keras.layers.LeakyReLU(alpha=0.2))
         self.batch_norm_4 = tf.keras.layers.BatchNormalization(axis=3, scale=True)
 
-        self.deconv1 = tf.keras.layers.Conv2DTranspose(filters=16, kernel_size=5, \
+        self.deconv1 = tf.keras.layers.Conv2DTranspose(filters=32, kernel_size=5, \
             strides=2, padding='same',
             kernel_initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.001),
             activation=tf.keras.layers.LeakyReLU(alpha=0.2))

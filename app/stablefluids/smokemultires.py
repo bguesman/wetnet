@@ -113,32 +113,18 @@ class SmokeMultiRes():
         # Call on data before loading weights.
         self.model(np.array([self.v], dtype=np.float32))
         print(os.getcwd())
-        self.model.load_weights("fluidgan/model_weights/model_weights")
+        self.model.load_weights("fluidgan/model_weights_skip_rnn/model_weights")
         
     def step(self):
+
+        real_start = datetime.datetime.now()
 
         # Re-randomize sources.
         self.randomize_density_source(self.flow_rate)
 
-        # Run through all our velocity updates.
-        self.F_mouse *= 0.9
-        start = datetime.datetime.now()
-        self.add_force(self.v, self.F)
-        self.add_force(self.v, self.F_mouse)
-        end = datetime.datetime.now()
-        # print("addforce time:", end.microsecond - start.microsecond)
-        self.impose_boundary(self.v, 2, 'collision')
-
-        # Add vorticity confinement force.
-        start = datetime.datetime.now()
-        self.vorticity_confinement(self.v)
-        end = datetime.datetime.now()
-        # print("vorticity confinement time:", end.microsecond - start.microsecond)
-        self.impose_boundary(self.v, 2, 'collision')
-
         # Downsample our velocity.
-        self.v = cv2.resize(self.v, dsize=(int(self.w/2), int(self.h/2)),
-            interpolation=cv2.INTER_LINEAR)
+        # self.v = cv2.resize(self.v, dsize=(int(self.w/2), int(self.h/2)),
+        #     interpolation=cv2.INTER_LINEAR)
 
         start = datetime.datetime.now()
         self.v = self.advect(self.v, self.v, 2, 0.0, 'linear')
@@ -160,17 +146,38 @@ class SmokeMultiRes():
         print("project time:", end.microsecond - start.microsecond)
         self.impose_boundary(self.v, 2, 'collision')
 
-        self.v = cv2.resize(self.v, dsize=(self.w, self.h),
-            interpolation=cv2.INTER_LINEAR)
-        self.impose_boundary(self.v, 2, 'collision')
+        # self.v = cv2.resize(self.v, dsize=(self.w, self.h),
+        #     interpolation=cv2.INTER_LINEAR)
+        # self.impose_boundary(self.v, 2, 'collision')
 
         # NEURAL NET:
         start = datetime.datetime.now()
         changes = ((self.model(np.array([self.v], dtype=np.float32))).numpy()).reshape(160,160,2) 
-        temp_v = self.v + changes 
+        temp_v = self.v #+ changes 
         # self.v = temp_v
         end = datetime.datetime.now()
         print("neural net time:", end.microsecond - start.microsecond)
+        self.impose_boundary(temp_v, 2, 'collision')
+
+        # Run through all our velocity updates.
+        self.F_mouse *= 0.9
+        start = datetime.datetime.now()
+        self.add_force(self.v, self.F)
+        self.add_force(self.v, self.F_mouse)
+        self.add_force(temp_v, self.F)
+        self.add_force(temp_v, self.F_mouse)
+        end = datetime.datetime.now()
+        # print("addforce time:", end.microsecond - start.microsecond)
+        self.impose_boundary(self.v, 2, 'collision')
+        self.impose_boundary(temp_v, 2, 'collision')
+
+        # Add vorticity confinement force.
+        start = datetime.datetime.now()
+        self.vorticity_confinement(self.v)
+        self.vorticity_confinement(temp_v)
+        end = datetime.datetime.now()
+        # print("vorticity confinement time:", end.microsecond - start.microsecond)
+        self.impose_boundary(self.v, 2, 'collision')
         self.impose_boundary(temp_v, 2, 'collision')
 
         # Run through all our density updates.
@@ -182,6 +189,8 @@ class SmokeMultiRes():
         # Update timestep.
         self.t += self.dt
         self.frame += 1
+        real_end = datetime.datetime.now()
+        print("total time:", real_end.microsecond - real_start.microsecond)
         return np.transpose(self.d[1:-1,1:-1])
 
     def add_force(self, data, force):

@@ -11,6 +11,8 @@ class Renderer():
         self.rand_color = np.random.rand(3)
         self.rand_color /= np.sum(self.rand_color ** 2)
         self.rand_color *= 2.0
+        self.rand_color = 1.5 * np.array([0, 0.9, 1.1])
+        # self.rand_color = 1.7 * np.array([2.0, 0.0, 0.0])
         pass
 
     def render(self, input):
